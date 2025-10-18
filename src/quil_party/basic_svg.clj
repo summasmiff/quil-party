@@ -51,6 +51,9 @@
         gr (q/create-graphics sketch-width sketch-height :svg svg)
         size (:size state)]
     (q/with-graphics gr
+      (q/stroke-weight 1.5)
+      (q/stroke 0)
+      (q/fill nil)
       (draw-vectors size))
     (q/save gr)))
 
