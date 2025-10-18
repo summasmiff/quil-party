@@ -18,13 +18,12 @@
   {:phase 0.0})
 
 (defn update-state 
-  "Called for each frame"
   [state]
   (let [new-phase (+ (:phase state) oscillation-speed)]
     {:phase new-phase}))
 
 (defn draw-shapes 
-  "MAIN DRAWING FUNCTION: update this to generate main images"
+  "main drawing fn"
   [size]
   (q/stroke 0 0 0)
   (q/fill nil)
@@ -43,26 +42,22 @@
     ;; Draw each line
     (doseq [i (range num-lines)]
       (let [y (* i line-spacing)
-            ;; Calculate amplitude with variation and scale
             amplitude (* base-amplitude 
                         amplitude-scale
                         (+ 0.8 (* 0.4 (Math/sin (* i 0.2)))))]
         
-        ;; Start drawing a new shape (polyline)
         (q/begin-shape)
         
-        ;; Add vertices to the shape
         (doseq [x (range 0 width 2)]
           (let [offset (* amplitude 
                           (Math/sin (+ (* frequency x) 
                                        (* phase-shift i))))]
             (q/vertex x (+ y offset))))
         
-        ;; End the shape
         (q/end-shape)))))
 
 (defn draw 
-  "Function to render to preview window"
+  "preview window"
   [state]
   (let [phase (:phase state)
         ;; Calculate oscillating size using sine wave
@@ -74,7 +69,7 @@
     (draw-shapes size)))
 
 (defn export 
-  "Function to export SVG"
+  "svg export"
   [state]
   (let [frame-num (q/frame-count)
         svg (str "svg/" sketch-name "-" frame-num ".svg")
