@@ -1,0 +1,4 @@
+{:linters
+ {:unused-namespace {:exclude [quil.core]}
+  :unused-referred-var {:exclude {quil.core [defsketch sketch-size]}}
+  :unresolved-symbol {:exclude [(quil.core/defsketch)]}}}
