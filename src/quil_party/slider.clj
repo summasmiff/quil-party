@@ -1,5 +1,5 @@
 (ns quil-party.slider
-  "Sketch suitable for AxiDraw pen plotter"
+  "basic interactivity via a slider"
   (:require [quil.core :as q]
             [quil.middleware :as m]))
 
@@ -10,16 +10,15 @@
 (def center-y 300)
 
 (defn setup 
-  "init state"
+  "init state for slider"
   []
   (q/frame-rate 10)
   {:size 100
    :slider-x 20
    :slider-y (+ sketch-height 60)
-   :slider-width 200
-   :slider-height 20
+   :slider-width (- sketch-width 100)
    :slider-min 10
-   :slider-max 200
+   :slider-max (- sketch-width 100)
    :slider-dragging? false})
 
 (defn draw-vectors 
@@ -38,27 +37,25 @@
     (q/stroke 150)
     (q/stroke-weight 2)
     (q/line slider-x slider-y (+ slider-x slider-width) slider-y)
-    
+
     (let [slider-pos (+ slider-x (* (/ (- size slider-min) (- slider-max slider-min)) slider-width))]
       ;; slider handle
       (q/fill (if slider-dragging? [50 50 200] [100 100 100]))
       (q/no-stroke)
       (q/ellipse slider-pos slider-y 20 20)
-      
+
       ;; slider labels
       (q/fill 0)
       (q/text-size 12)
       (q/text (str "Min: " slider-min) slider-x (+ slider-y 25))
-      (q/text (str "Max: " slider-max) (- (+ slider-x slider-width) 50) (+ slider-y 25))
-      (q/text-size 14)
-      (q/text (str "Radius: " size) (+ slider-x slider-width 20) (+ slider-y 5)))))
+      (q/text (str "Max: " slider-max) (- (+ slider-x slider-width) 50) (+ slider-y 25)))))
 
 (defn preview
   "preview window"
   [state]
   (let [size (:size state)]
     (q/background 255)
-    (draw-vectors size) 
+    (draw-vectors size)
 
     ;; interactivity zone
     (q/stroke 200)
