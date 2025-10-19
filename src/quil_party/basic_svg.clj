@@ -12,27 +12,36 @@
 (defn setup 
   "init state"
   []
-  (q/frame-rate 10)
-  {:size 10})
+  (q/frame-rate 30)
+  {:size 10
+   :num-points 36})
 
 (defn update-state 
   [state]
-  {:size (+ (:size state) 2)})
+  {:size (+ (:size state) 1)
+   :num-points (:num-points state)})
 
-(defn draw-vectors 
-  "all vectors should have (q/stroke-weight 1.5) (q/stroke 0) and (q/fill nil) for pen plotter"
-  [size]
+(defn draw-circle 
+  [size num-points]
   (q/stroke-weight 1.5)
   (q/stroke 0)
   (q/fill nil)
-  (q/ellipse center-x center-y size size))
+  
+  (q/begin-shape)
+  (dotimes [i num-points]
+    (let [angle (* 2 Math/PI (/ i num-points))
+          x (+ center-x (* size (Math/cos angle)))
+          y (+ center-y (* size (Math/sin angle)))]
+      (q/vertex x y)))
+  (q/end-shape :close))
 
 (defn preview
   "preview window"
   [state]
-  (let [size (:size state)]
+  (let [size (:size state)
+        num-points (:num-points state)]
     (q/background 255)
-    (draw-vectors size)
+    (draw-circle size num-points)
 
     (q/stroke 200)
     (q/line 0 sketch-height sketch-width sketch-height)
@@ -40,7 +49,8 @@
     (q/fill 0)
     (q/text-size 14)
     (q/text "current state:" 20 (+ sketch-height 12))
-    (q/text (str "size: " size) 20 (+ sketch-height 30))))
+    (q/text (str "size: " size) 20 (+ sketch-height 30))
+    (q/text (str "points: " num-points) 20 (+ sketch-height 50))))
 
 (defn export 
   "svg export"
@@ -49,12 +59,13 @@
         frame-num (q/frame-count)
         svg (str "svg/" name "-" frame-num ".svg")
         gr (q/create-graphics sketch-width sketch-height :svg svg)
-        size (:size state)]
+        size (:size state)
+        num-points (:num-points state)]
     (q/with-graphics gr
       (q/stroke-weight 1.5)
       (q/stroke 0)
       (q/fill nil)
-      (draw-vectors size))
+      (draw-circle size num-points))
     (q/save gr)))
 
 (defn key-pressed [state event]
