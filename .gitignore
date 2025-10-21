@@ -12,3 +12,4 @@ todo.md
 .clj-kondo/.cache
 .calva/output-window
 .lsp/.cache/db.transit.json
+.DS_Store
