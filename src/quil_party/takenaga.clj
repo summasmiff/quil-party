@@ -10,6 +10,8 @@
 (def amplitude 10)                ;; height of sine wave
 (def curl-factor 1)               ;; depth of each individual sine wave
 (def max-circle-radius 40)         ;; maximum size of space filling circle (value used for middlest ring & scaled for external / internal)
+(def circle-buffer 1.5)
+(def wave-buffer 0.6)
 
 ;; file parameters
 (def file-name "takenaga")
@@ -108,7 +110,7 @@
     (< distance (+ r1 r2))))
 
 (defn draw-space-filling 
-  "Draw small circles in between each sine wave without overlapping"
+  "Draw small circles at random points between sine waves without overlapping"
   [size num-rays]
   (q/stroke-weight 1)
   (q/stroke 0)
@@ -120,7 +122,30 @@
         ring-distances (cons 0 (map #(* size %) ring-layers))
         max-dist (last ring-distances)
         ;; Track drawn circles to avoid overlaps
-        drawn-circles (atom [])]
+        drawn-circles (atom [])
+        ;; Track sine wave segments to avoid overlaps with waves
+        sine-wave-segments (atom [])]
+    
+    ;; First, collect all sine wave segments for overlap checking
+    (dotimes [i num-rays]
+      (let [angle (* i angle-step)]
+        (doseq [j (range 0 max-dist 2)]  ;; Sample points along each ray
+          (let [segment-index (loop [idx 0]
+                                (if (>= idx (dec (count ring-distances)))
+                                  (dec (count ring-distances))
+                                  (if (<= j (nth ring-distances (inc idx)))
+                                    idx
+                                    (recur (inc idx)))))
+                start-radius (nth ring-distances segment-index)
+                end-radius (nth ring-distances (inc segment-index))
+                segment-length (- end-radius start-radius)
+                t (/ (- j start-radius) segment-length)
+                wave-offset (* amplitude (Math/sin (* curl-factor 2 Math/PI t)))
+                base-x (+ center-x (* j (Math/cos angle)))
+                base-y (+ center-y (* j (Math/sin angle)))
+                x (+ base-x (* wave-offset (Math/cos (+ angle (/ Math/PI 2)))))
+                y (+ base-y (* wave-offset (Math/sin (+ angle (/ Math/PI 2)))))]
+            (swap! sine-wave-segments conj [x y])))))
     
     ;; For each pair of adjacent rays
     (dotimes [i num-rays]
@@ -128,7 +153,7 @@
             angle2 (* (mod (inc i) num-rays) angle-step)]
         
         ;; Draw circles at regular intervals along the rays
-        (doseq [j (range 0 max-dist 10)]  ;; Increased step to 10 for better performance
+        (doseq [j (range 0 max-dist 10)]  ;; Step by 10 pixels for performance
           ;; Find which ring segment we're in
           (let [segment-index (loop [idx 0]
                                 (if (>= idx (dec (count ring-distances)))
@@ -159,21 +184,34 @@
                 x2 (+ base-x2 (* wave-offset2 (Math/cos (+ angle2 (/ Math/PI 2)))))
                 y2 (+ base-y2 (* wave-offset2 (Math/sin (+ angle2 (/ Math/PI 2)))))
                 
-                ;; Calculate the midpoint between the two offset positions
-                x (/ (+ x1 x2) 2)
-                y (/ (+ y1 y2) 2)
+                ;; Choose a random point between the two sine waves
+                t-random (q/random 0.2 1.2)  ;; Random factor between 0.8 and 1.2
+                x (/ (+ x1 (* t-random x2)) (inc t-random))
+                y (/ (+ y1 (* t-random y2)) (inc t-random))
+                
+                ;; Calculate the distance between the two sine wave points
+                wave-distance (Math/sqrt (+ (* (- x2 x1) (- x2 x1)) (* (- y2 y1) (- y2 y1))))
                 
                 ;; Scale the circle size based on the distance from the center
                 ;; Circles increase in size as they move further from center
-                circle-radius (* max-circle-radius (/ j max-dist))
+                desired-radius (* max-circle-radius (/ j max-dist))
+                
+                ;; Limit radius to avoid overlapping with sine waves
+                circle-radius (min desired-radius (* wave-distance wave-buffer))
                 
                 ;; Check if this circle would overlap with any already drawn circles
-                overlaps? (some (fn [[cx cy cr]]
-                                 (circles-overlap? x y circle-radius cx cy cr))
-                               @drawn-circles)]
+                overlaps-circles? (some (fn [[cx cy cr]]
+                                         (circles-overlap? x y circle-radius cx cy cr))
+                                       @drawn-circles)
+                
+                ;; Check if this circle would overlap with sine waves
+                overlaps-waves? (some (fn [[wx wy]]
+                                       (let [dist (Math/sqrt (+ (* (- x wx) (- x wx)) (* (- y wy) (- y wy))))]
+                                         (< dist (+ circle-radius circle-buffer))))  ;; add a small buffer
+                                     @sine-wave-segments)]
             
-            ;; Only draw the circle if it doesn't overlap
-            (when-not overlaps?
+            ;; Only draw the circle if it doesn't overlap with circles or waves
+            (when (and (not overlaps-circles?) (not overlaps-waves?))
               (q/ellipse x y circle-radius circle-radius)
               ;; Add this circle to the list of drawn circles
               (swap! drawn-circles conj [x y circle-radius]))))))))
