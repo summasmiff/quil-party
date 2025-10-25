@@ -5,13 +5,12 @@
 
 ;; the fun zone
 (def ring-thickness 40)           ;; init size for ring diameter
-(def ring-layers [2 3 5 8 13])     ;; ring layering: should be strictly increasing but play with the exact ints
+(def ring-layers [2 3 5 8 13])    ;; ring layering: should be strictly increasing but play with the exact ints (fibonacci is nice)
 (def num-rays 36)                 ;; number of rays exploding from center
 (def amplitude 10)                ;; height of sine wave
-(def curl-factor 1)               ;; depth of each individual sine wave
-(def max-circle-radius 40)         ;; maximum size of space filling circle (value used for middlest ring & scaled for external / internal)
-(def circle-buffer 1.5)
-(def wave-buffer 0.6)
+(def curl-factor 1)               ;; man idk
+(def max-circle-radius 24)        ;; maximum size of space filling circle
+(def circle-interval 4)           ;; how often to try and draw a circle (increase for better perf but less circles)
 
 ;; file parameters
 (def file-name "takenaga")
@@ -153,7 +152,7 @@
             angle2 (* (mod (inc i) num-rays) angle-step)]
         
         ;; Draw circles at regular intervals along the rays
-        (doseq [j (range 0 max-dist 10)]  ;; Step by 10 pixels for performance
+        (doseq [j (range 0 max-dist circle-interval)]
           ;; Find which ring segment we're in
           (let [segment-index (loop [idx 0]
                                 (if (>= idx (dec (count ring-distances)))
@@ -178,43 +177,37 @@
                 base-x2 (+ center-x (* j (Math/cos angle2)))
                 base-y2 (+ center-y (* j (Math/sin angle2)))
 
-                ;; Apply the offsets perpendicular to the ray directions
+                ;; Apply the offsets perpendicular to the ray directions (create the sine waves)
                 x1 (+ base-x1 (* wave-offset1 (Math/cos (+ angle1 (/ Math/PI 2)))))
                 y1 (+ base-y1 (* wave-offset1 (Math/sin (+ angle1 (/ Math/PI 2)))))
                 x2 (+ base-x2 (* wave-offset2 (Math/cos (+ angle2 (/ Math/PI 2)))))
                 y2 (+ base-y2 (* wave-offset2 (Math/sin (+ angle2 (/ Math/PI 2)))))
                 
                 ;; Choose a random point between the two sine waves
-                t-random (q/random 0.2 1.2)  ;; Random factor between 0.8 and 1.2
+                t-random (q/random 0 (/ max-circle-radius 2))
+                ;; why is this clumpy
                 x (/ (+ x1 (* t-random x2)) (inc t-random))
                 y (/ (+ y1 (* t-random y2)) (inc t-random))
                 
-                ;; Calculate the distance between the two sine wave points
-                wave-distance (Math/sqrt (+ (* (- x2 x1) (- x2 x1)) (* (- y2 y1) (- y2 y1))))
-                
-                ;; Scale the circle size based on the distance from the center
                 ;; Circles increase in size as they move further from center
                 desired-radius (* max-circle-radius (/ j max-dist))
                 
-                ;; Limit radius to avoid overlapping with sine waves
-                circle-radius (min desired-radius (* wave-distance wave-buffer))
-                
                 ;; Check if this circle would overlap with any already drawn circles
                 overlaps-circles? (some (fn [[cx cy cr]]
-                                         (circles-overlap? x y circle-radius cx cy cr))
+                                         (circles-overlap? x y desired-radius cx cy cr))
                                        @drawn-circles)
                 
                 ;; Check if this circle would overlap with sine waves
                 overlaps-waves? (some (fn [[wx wy]]
                                        (let [dist (Math/sqrt (+ (* (- x wx) (- x wx)) (* (- y wy) (- y wy))))]
-                                         (< dist (+ circle-radius circle-buffer))))  ;; add a small buffer
+                                         (< dist desired-radius)))
                                      @sine-wave-segments)]
             
             ;; Only draw the circle if it doesn't overlap with circles or waves
-            (when (and (not overlaps-circles?) (not overlaps-waves?))
-              (q/ellipse x y circle-radius circle-radius)
+            (when (and (not overlaps-circles?) true #_(not overlaps-waves?))
+              (q/ellipse x y desired-radius desired-radius)
               ;; Add this circle to the list of drawn circles
-              (swap! drawn-circles conj [x y circle-radius]))))))))
+              (swap! drawn-circles conj [x y desired-radius]))))))))
 
 (defn draw
   "main vector manipulation"
@@ -223,13 +216,14 @@
   (q/stroke 0)
   (q/fill nil)
 
-  ;; circles
+  ;; rings (for sine wave sizing)
   #_(doseq [multiplier ring-layers]
       (draw-circle (* size multiplier) num-points))
   ;; rays
   #_(draw-rays num-rays)
   ;; sine waves
   (draw-sine-waves size num-rays)
+  ;; space filling circles
   (draw-space-filling size num-rays))
 
 (defn preview
@@ -239,14 +233,17 @@
   ((println "previewing...")
    (q/background 255)
    (draw ring-thickness)
-   ;; parameter preview
+
+   ;; parameter preview box 
+   (q/fill 255)
+   (q/rect 0 sketch-height sketch-width (- preview-height sketch-height))
    (q/stroke 200)
    (q/line 0 sketch-height sketch-width sketch-height)
    (q/stroke 0)
    (q/fill 0)
    (q/text-size 14)
    (q/text "current state:" 20 (+ sketch-height 12))
-   (q/text (str "size: " ring-thickness) 20 (+ sketch-height 30))
+   (q/text (str "max circle radius: " max-circle-radius) 20 (+ sketch-height 30))
    (q/text (str "points: " num-points) 20 (+ sketch-height 50))
    (q/text (str "rays: " num-rays) 20 (+ sketch-height 70))
    state))
