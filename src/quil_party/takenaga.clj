@@ -6,11 +6,11 @@
 ;; the fun zone
 (def ring-thickness 40)           ;; init size for ring diameter
 (def ring-layers [2 3 5 8 13])    ;; ring layering: should be strictly increasing but play with the exact ints (fibonacci is nice)
-(def num-rays 36)                 ;; number of rays exploding from center
+(def num-rays 48)                 ;; number of rays exploding from center
 (def amplitude 10)                ;; height of sine wave
 (def curl-factor 1)               ;; man idk
 (def max-circle-radius 24)        ;; maximum size of space filling circle
-(def circle-interval 4)           ;; how often to try and draw a circle (increase for better perf but less circles)
+(def circle-interval 10)           ;; how often to try and draw a circle (larger = better perf but less circles)
 
 ;; file parameters
 (def file-name "takenaga")
@@ -101,12 +101,11 @@
         (q/end-shape)))))
 
 (defn- circles-overlap?
-  "Check if two circles overlap"
+  "Check if two circles are exactly the same (same center and radius)"
   [x1 y1 r1 x2 y2 r2]
-  (let [dx (- x1 x2)
-        dy (- y1 y2)
-        distance (Math/sqrt (+ (* dx dx) (* dy dy)))]
-    (< distance (+ r1 r2))))
+  (and (= x1 x2)
+       (= y1 y2)
+       (= r1 r2)))
 
 (defn draw-space-filling 
   "Draw small circles at random points between sine waves without overlapping"
@@ -184,7 +183,9 @@
                 y2 (+ base-y2 (* wave-offset2 (Math/sin (+ angle2 (/ Math/PI 2)))))
                 
                 ;; Choose a random point between the two sine waves
-                t-random (q/random 0 (/ max-circle-radius 2))
+                ;; smaller = closer to sine wave
+                ;; t-random (q/random 0 (/ max-circle-radius 2))
+                t-random 1
                 ;; why is this clumpy
                 x (/ (+ x1 (* t-random x2)) (inc t-random))
                 y (/ (+ y1 (* t-random y2)) (inc t-random))
@@ -222,7 +223,7 @@
   ;; rays
   #_(draw-rays num-rays)
   ;; sine waves
-  (draw-sine-waves size num-rays)
+  #_(draw-sine-waves size num-rays)
   ;; space filling circles
   (draw-space-filling size num-rays))
 
