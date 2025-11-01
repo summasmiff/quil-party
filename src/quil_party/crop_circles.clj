@@ -67,25 +67,6 @@
         position (- (* (- x3 x1) dy) (* (- y3 y1) dx))]
     (if (> position 0) -1 1)))
 
-(defn calculate-apex-angle
-  "Calculate the angle of the apex point relative to the circumcircle center."
-  [[x3 y3] [cx cy]]
-  (Math/atan2 (- y3 cy) (- x3 cx)))
-
-(defn calculate-circle-positions
-  "Calculate positions for a pair of circles on either side of the apex circle."
-  [[cx cy] r apex-angle max-radius adjusted-radius]
-  (let [d (+ max-radius adjusted-radius)
-        _ (when (> d (* 2 r))
-            (throw (ex-info "No solution exists for circle placement" 
-                            {:d d :max-radius max-radius :adjusted-radius adjusted-radius :r r})))
-        cos-theta (- 1 (/ (* d d) (* 2 r r)))
-        theta (Math/acos cos-theta)
-        angle1 (+ apex-angle theta)
-        angle2 (- apex-angle theta)]
-    [[(+ cx (* r (Math/cos angle1))) (+ cy (* r (Math/sin angle1)))]
-     [(+ cx (* r (Math/cos angle2))) (+ cy (* r (Math/sin angle2)))]]))
-
 (defn draw-circle
   "draws a circle shape"
   [center-point radius]
@@ -110,36 +91,59 @@
         (q/vertex x y)))
     (q/end-shape)))
 
-(defn draw-circle-pairs
-  "Draw pairs of circles on either side of the apex circle."
-  [[cx cy] r apex-angle max-radius]
-  (dotimes [i 1]
-    (let [adjusted-radius (* max-radius (- 1 (* i 0.1)))
-          [[left-x left-y] [right-x right-y]] (calculate-circle-positions 
-                                                 [cx cy] r apex-angle max-radius adjusted-radius)]
-      (draw-circle [left-x left-y] adjusted-radius)
-      (draw-circle [right-x right-y] adjusted-radius))))
+(defn find-pair-centers
+  "Find the centers of a pair of circles that are tangent to an apex circle at the point where the apex circle is tangent to an arc.
+   The apex circle is centered at apex-circle-center with radius max-radius.
+   The pair circles have radius radius.
+   The arc is centered at arc-center.
+   Returns a vector of two points: [inner-center outer-center]"
+  [apex-circle-center radius arc-center]
+  (let [[ax ay] apex-circle-center
+        [cx cy] arc-center
+        ;; Calculate the direction from the arc center to the apex circle center
+        dx (- ax cx)
+        dy (- ay cy)
+        ;; Normalize this direction
+        length (Math/sqrt (+ (* dx dx) (* dy dy)))
+        ndx (/ dx length)
+        ndy (/ dy length)
+        ;; Calculate the distance between the centers of the apex circle and the pair circles
+        distance (+ max-radius radius)
+        ;; Calculate the centers of the pair circles
+        inner-x (- ax (* distance ndx))
+        inner-y (- ay (* distance ndy))
+        outer-x (+ ax (* distance ndx))
+        outer-y (+ ay (* distance ndy))]
+    [[inner-x inner-y] [outer-x outer-y]]))
+
+(defn draw-circle-pair
+  "Draw a pair of circles with their center point on the arc.
+   The circles should be on the inside and the outside of the apex circle, relative to the arc.
+   Each circle should have its circumference touching the apex circle's circumference at the point where the apex circle's circumference touches the arc.
+   "
+  [apex-circle-center radius arc-center]
+  (let [[[inner-x inner-y] [outer-x outer-y]] (find-pair-centers apex-circle-center radius arc-center)] ;; need to implement this function
+    (draw-circle [inner-x inner-y] radius)
+    (draw-circle [outer-x outer-y] radius)))
 
 (defn draw-arc
   "Draws an arc from start to end that describes 2/3rds the circumference of a circle formed around an equilateral triangle formed of the start, end, and a third point equidistant to both"
   [start end]
   (let [steps 600
-        pair-count 2
         third-point (calculate-third-point start end)
         [cx cy] (calculate-circumcircle-center start end third-point)
         r (calculate-circumcircle-radius start end)
         start-angle (calculate-start-angle start [cx cy])
-        direction (determine-arc-direction start end third-point)
-        apex-angle (calculate-apex-angle third-point [cx cy])]
-    
+        direction (determine-arc-direction start end third-point)]
+
     ;; Draw the arc
     (draw-arc-path [cx cy] r start-angle direction steps)
-    
+
     ;; Draw an apex circle
-    (draw-circle third-point max-radius)
-    
-    ;; Draw pairs of circles on either side of the apex circle
-    (draw-circle-pairs [cx cy] r apex-angle max-radius)))
+    (draw-circle end max-radius)
+
+    ;; Draw a pair of circles on either side of the apex circle
+    (draw-circle-pair end min-radius [cx cy])))
 
 (defn subdivide-circle
   "Returns a vector of points ([x y] vectors) representing equal subdivisions of the circumference of a circle centered at center-point"
