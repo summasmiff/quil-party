@@ -5,11 +5,11 @@
 
 ;; "the fun zone"
 (def resolution 100) ;; how many points the circles/spirals are made of
-(def outer-radius 240) ;; radius of outer container circle (not rendered)
-(def num-arcs 6) ;; number of subdivisions for the outer container circle
+(def outer-radius 120) ;; radius of outer container circle (not rendered)
+(def num-arcs 9) ;; number of subdivisions for the outer container circle
 (def num-circles 13) ;; circles per arc
-(def min-radius 12)
-(def max-radius 36)
+(def min-radius 4)
+(def max-radius 16)
 
 ;; basic file parameters
 (def sketch-width 800)
@@ -25,13 +25,6 @@
   (doseq [[x y] points]
     (q/vertex x y))
   (q/end-shape :close))
-
-(defn- circles-overlap?
-  "Check if two circles are exactly the same (same center and radius)"
-  [x1 y1 r1 x2 y2 r2]
-  (and (= x1 x2)
-       (= y1 y2)
-       (= r1 r2)))
 
 (defn calculate-third-point
   "Calculate the third point of an equilateral triangle given two points."
@@ -83,7 +76,6 @@
   "draws a tight space-filling spiral suitable for a pen plotter to use as a filled circle"
   [center-point radius & {:keys [stroke-width] :or {stroke-width 3}}]
   (let [[cx cy] center-point
-        ;; Ensure stroke-width is positive
         sw (max 0.1 stroke-width)
         ;; Calculate spiral constant to achieve desired spacing
         a (/ sw (* 2 Math/PI))
@@ -104,64 +96,13 @@
         (q/vertex x y)))
     (q/end-shape)))
 
-(defn draw-arc-path
-  "Draw an arc path around a circumcircle."
-  [[cx cy] r start-angle direction steps]
-  (let [angle-inc (* direction (/ (* 4 Math/PI) 3 steps))]
-    (q/begin-shape)
-    (dotimes [i steps]
-      (let [angle (+ start-angle (* i angle-inc))
-            x (+ cx (* r (Math/cos angle)))
-            y (+ cy (* r (Math/sin angle)))]
-        (q/vertex x y)))
-    (q/end-shape)))
-
-(defn find-tangent-pairs
-  "Find the centers of a pair of circles that are tangent to an apex circle at the point where the apex circle is tangent to an arc.
-   The apex circle is centered at apex-circle-center with radius max-radius.
-   The pair circles have radius radius.
-   The arc is centered at arc-center.
-   Returns a vector of two points: [inner-center outer-center]"
-  [apex-circle-center radius arc-center]
-  (let [[ax ay] apex-circle-center
-        [cx cy] arc-center
-        ;; Calculate the direction from the arc center to the apex circle center
-        dx (- ax cx)
-        dy (- ay cy)
-        ;; Normalize this direction
-        length (Math/sqrt (+ (* dx dx) (* dy dy)))
-        ndx (/ dx length)
-        ndy (/ dy length)
-        ;; Calculate the distance between the centers of the apex circle and the pair circles
-        distance (+ max-radius radius)
-        ;; Calculate the centers of the pair circles
-        inner-x (- ax (* distance ndx))
-        inner-y (- ay (* distance ndy))
-        outer-x (+ ax (* distance ndx))
-        outer-y (+ ay (* distance ndy))]
-    [[inner-x inner-y] [outer-x outer-y]]))
-
-(defn draw-tangent-pair
-  "Draw a pair of circles with their center point on the arc.
-   The circles should be on the inside and the outside of the apex circle, relative to the arc.
-   Each circle should have its circumference touching the apex circle's circumference at the point where the apex circle's circumference touches the arc.
-   "
-  [apex-circle-center radius arc-center]
-  (let [[[inner-x inner-y] [outer-x outer-y]] (find-tangent-pairs apex-circle-center radius arc-center)]
-    (draw-circle [inner-x inner-y] radius)
-    (draw-circle [outer-x outer-y] radius)))
-
 (defn draw-arc-circles
   "Draws 13 circles along the arc path, with the apex circle in the middle.
    The circles decrease in size as they move away from the apex circle.
    Each circle's circumference touches the next circle's circumference without overlapping."
-  [[cx cy] r start-angle direction middle-point]
+  [[cx cy] r start-angle direction]
   (let [num-circles 13
         apex-index (quot num-circles 2)  ;; Middle index (6 for 13 circles)
-        
-        ;; Calculate the angle of the middle point
-        middle-angle (Math/atan2 (- (second middle-point) cy) 
-                                 (- (first middle-point) cx))
         
         ;; Calculate the radius step between circles
         radius-step (/ (- max-radius min-radius) apex-index)
@@ -201,25 +142,13 @@
 (defn draw-arc
   "Draws an arc from start to end that describes 2/3rds the circumference of a circle formed around an equilateral triangle formed of the start, end, and a third point equidistant to both"
   [start end]
-  (let [steps 600
-        third-point (calculate-third-point start end)
+  (let [third-point (calculate-third-point start end)
         [cx cy] (calculate-circumcircle-center start end third-point)
         r (calculate-circumcircle-radius start end)
         start-angle (calculate-start-angle start [cx cy])
-        direction (determine-arc-direction start end third-point)
-        
-        ;; Calculate the middle angle of the arc (1/3 of the way around the circle, since we're drawing 2/3 of the circumference)
-        middle-angle (+ start-angle (* direction (* 1/3 Math/PI)))
-        
-        ;; Calculate the middle point of the arc
-        middle-point [(+ cx (* r (Math/cos middle-angle)))
-                      (+ cy (* r (Math/sin middle-angle)))]]
+        direction (determine-arc-direction start end third-point)]
 
-    ;; Draw the arc
-    #_(draw-arc-path [cx cy] r start-angle direction steps)
-
-    ;; Draw all circles along the arc, including the apex circle in the middle
-    (draw-arc-circles [cx cy] r start-angle direction middle-point)))
+    (draw-arc-circles [cx cy] r start-angle direction)))
 
 (defn subdivide-circle
   "Returns a vector of points ([x y] vectors) representing equal subdivisions of the circumference of a circle centered at center-point"
@@ -239,9 +168,6 @@
   (q/stroke-weight 1.5)
   (q/stroke 0)
   (q/fill nil)
-
-  ;; draw center circle
-  #_(draw-spiral [center-x center-y] max-radius)
 
   ;; create arcs
   (let [points (subdivide-circle [center-x center-y] outer-radius num-arcs)]
