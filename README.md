@@ -1,6 +1,10 @@
 # quil-party
 Doodling with the [Quil library](http://quil.info/) in Clojure
 
+<img src="./img/readme_imgs/crop-circles-cropped.jpg">
+
+**Crop Circles** 2025
+
 ## Usage
 - Jack-in using Leiningen
 - sketches live in `./src/quil_party`
