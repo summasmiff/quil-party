@@ -1,4 +1,4 @@
-(ns quil-party.takenaga
+(ns sketchbook.takenaga
   "recreation of Barbara Takenaga's Ozma(2009)"
   (:require [quil.core :as q]
             [quil.middleware :as m]))

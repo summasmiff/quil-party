@@ -1,4 +1,4 @@
-(ns quil-party.crop-circles
+(ns sketchbook.crop-circles
   "inspired by John Lundberg's works"
   (:require [quil.core :as q]
             [quil.middleware :as m]))
@@ -197,6 +197,16 @@
   (q/stroke 200)
   (q/line 0 sketch-height sketch-width sketch-height))
 
+(defn get-fun-zone-params 
+  "Returns a vector of parameter name-value pairs from the 'fun zone' section"
+  []
+  [[:resolution resolution]
+   [:outer-radius outer-radius]
+   [:num-arcs num-arcs]
+   [:num-circles num-circles]
+   [:min-radius min-radius]
+   [:max-radius max-radius]])
+
 (defn display-param 
   "Displays a single parameter at the specified position"
   [param-name param-value x y]
@@ -213,16 +223,6 @@
   (doseq [[i [param-name param-value]] (map-indexed vector params)]
     (let [y-pos (+ y-start 20 (* i line-height))]
       (display-param param-name param-value x-start y-pos))))
-
-(defn get-fun-zone-params 
-  "Returns a vector of parameter name-value pairs from the 'fun zone' section"
-  []
-  [[:resolution resolution]
-   [:outer-radius outer-radius]
-   [:num-arcs num-arcs]
-   [:num-circles num-circles]
-   [:min-radius min-radius]
-   [:max-radius max-radius]])
 
 (defn preview
   "preview window"

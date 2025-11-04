@@ -1,4 +1,4 @@
-(ns quil-party.cataract-3
+(ns sketchbook.cataract-3
   "quil sketch to replicate Bridget Riley's Cataract 3. Animated!"
   (:require [quil.core :as q]
             [quil.middleware :as m]))

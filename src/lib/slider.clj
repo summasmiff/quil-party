@@ -1,4 +1,4 @@
-(ns quil-party.slider
+(ns lib.slider
   "basic interactivity via a slider"
   (:require [quil.core :as q]
             [quil.middleware :as m]))

@@ -9,6 +9,7 @@ pom.xml.asc
 /.nrepl-port
 /svg
 todo.md
+/blog/*
 .clj-kondo/.cache
 .calva/output-window
 .lsp/.cache/db.transit.json

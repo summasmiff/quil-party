@@ -1,4 +1,4 @@
-(ns quil-party.basic-svg
+(ns basic-svg
   "Sketch suitable for AxiDraw pen plotter"
   (:require [quil.core :as q]
             [quil.middleware :as m]))
