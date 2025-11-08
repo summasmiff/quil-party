@@ -1,4 +1,4 @@
-(ns sketchbook.fun-mode-sketch
+(ns quil-party.sketchbook.fun-mode-sketch
   "Here is a sketch that uses fun-mode.
    The idea of the sketch is to draw a circle which follows the mouse. 
    It expands on every frame and shrinks when mouse is moved. 

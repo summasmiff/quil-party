@@ -1,4 +1,4 @@
-(ns sketchbook.waveforms
+(ns quil-party.sketchbook.waveforms
   "quil sketch that started as a copy of Bridget Riley's Fall (1963) and became something else"
   (:require [quil.core :as q]
             [quil.middleware :as m]))

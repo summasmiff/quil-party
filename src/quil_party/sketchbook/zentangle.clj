@@ -1,4 +1,4 @@
-(ns sketchbook.zentangle
+(ns quil-party.sketchbook.zentangle
   "zentangle for AxiDraw pen plotter"
   (:require [quil.core :as q]
             [quil.middleware :as m]))
