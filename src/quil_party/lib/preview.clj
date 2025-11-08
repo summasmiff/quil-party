@@ -1,4 +1,4 @@
-(ns lib.preview
+(ns quil-party.lib.preview
   (:require [quil.core :as q]))
 
 (defn display-param 

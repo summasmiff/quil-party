@@ -1,7 +1,9 @@
-(ns sketchbook.crop-circles
+(ns quil-party.sketchbook.crop-circles
   "inspired by John Lundberg's works"
-  (:require [quil.core :as q]
-            [quil.middleware :as m]))
+  (:require
+   [quil-party.lib.preview :refer [display-params]]
+   [quil.core :as q]
+   [quil.middleware :as m]))
 
 ;; "the fun zone"
 (def resolution 100) ;; how many points the circles/spirals are made of
@@ -103,18 +105,18 @@
   [[cx cy] r start-angle direction]
   (let [num-circles 13
         apex-index (quot num-circles 2)  ;; Middle index (6 for 13 circles)
-        
+
         ;; Calculate the radius step between circles
         radius-step (/ (- max-radius min-radius) apex-index)
-        
+
         ;; Calculate the radii for all circles
         radii (vec (for [i (range num-circles)]
                      (let [distance-from-apex (Math/abs (- i apex-index))]
                        (max min-radius (- max-radius (* distance-from-apex radius-step))))))
-        
+
         ;; Ensure the apex circle has exactly max-radius
         radii (assoc radii apex-index max-radius)
-        
+
         ;; Calculate the angles for all circles
         angles (loop [i 0
                       current-angle start-angle
@@ -123,14 +125,14 @@
                    angles
                    (let [;; Calculate the distance between centers of current and next circle
                          distance (+ (radii i) (radii (inc i)))
-                         
+
                          ;; Calculate the angle step based on the arc length and arc radius
                          angle-step (* direction (/ distance r))
-                         
+
                          ;; Calculate the next angle
                          next-angle (+ current-angle angle-step)]
                      (recur (inc i) next-angle (conj angles next-angle)))))]
-    
+
     ;; Draw all circles
     (doseq [i (range num-circles)]
       (let [angle (angles i)
@@ -177,19 +179,19 @@
 
 ;; .-"-.     .-"-.     .-"-.     .-"-.     .-"-.     .-"-. quil boilerplate .-"-.     .-"-.     .-"-.     .-"-.     .-"-.
 ;;      "-.-"     "-.-"     "-.-"     "-.-"     "-.-"                            "-.-"     "-.-"     "-.-"     "-.-"    
-(defn setup 
+(defn setup
   "init state"
   []
   (q/frame-rate 30)
   {:size min-radius
    :num-points resolution})
 
-(defn update-state 
+(defn update-state
   [state]
   {:size (+ (:size state) 1)
    :num-points (:num-points state)})
 
-(defn draw-parameter-background 
+(defn draw-parameter-background
   "Draws the background for the parameter display section"
   []
   (q/fill 255)
@@ -197,7 +199,7 @@
   (q/stroke 200)
   (q/line 0 sketch-height sketch-width sketch-height))
 
-(defn get-fun-zone-params 
+(defn get-fun-zone-params
   "Returns a vector of parameter name-value pairs from the 'fun zone' section"
   []
   [[:resolution resolution]
@@ -207,47 +209,26 @@
    [:min-radius min-radius]
    [:max-radius max-radius]])
 
-(defn display-param 
-  "Displays a single parameter at the specified position"
-  [param-name param-value x y]
-  (q/text (str (name param-name) ": " param-value) x y))
-
-(defn display-params 
-  "Displays multiple parameters starting at (x-start, y-start) with specified line height"
-  [params x-start y-start line-height]
-  (q/stroke 0)
-  (q/fill 0)
-  (q/text-size 14)
-  (q/text "current parameters:" x-start y-start)
-  
-  (doseq [[i [param-name param-value]] (map-indexed vector params)]
-    (let [y-pos (+ y-start 20 (* i line-height))]
-      (display-param param-name param-value x-start y-pos))))
-
 (defn preview
   "preview window"
-  [state]
-  (let [size (:size state)
-        num-points (:num-points state)]
-    (q/background 255)
-    (draw)
-    
-    ;; parameter review section
-    (draw-parameter-background)
-    
-    ;; write parameter name and current value for any defs in "the fun zone"
-    (let [fun-zone-params (get-fun-zone-params)]
-      (display-params fun-zone-params 20 (+ sketch-height 12) 20))))
+  [_state]
+  (q/background 255)
+  (draw)
 
-(defn export 
+  ;; parameter review section
+  (draw-parameter-background)
+
+  ;; write parameter name and current value for any defs in "the fun zone"
+  (let [fun-zone-params (get-fun-zone-params)]
+    (display-params fun-zone-params 20 (+ sketch-height 12) 20)))
+
+(defn export
   "saves svg to a file"
-  [state]
+  [_state]
   (let [name "crop-circle"
         frame-num (q/frame-count)
         svg (str "svg/" name "-" frame-num ".svg")
-        gr (q/create-graphics sketch-width sketch-height :svg svg)
-        size (:size state)
-        num-points (:num-points state)]
+        gr (q/create-graphics sketch-width sketch-height :svg svg)]
     (q/with-graphics gr
       (draw))
     (q/save gr)))

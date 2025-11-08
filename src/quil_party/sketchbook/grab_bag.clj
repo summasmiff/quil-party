@@ -1,4 +1,4 @@
-(ns sketchbook.grab-bag
+(ns quil-party.sketchbook.grab-bag
  "grab bag of functions invented for other sketches but ultimately not used"
   (:require [quil.core :as q]
             [quil.middleware :as m]))
