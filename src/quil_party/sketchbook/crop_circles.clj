@@ -1,17 +1,10 @@
 (ns quil-party.sketchbook.crop-circles
   "inspired by John Lundberg's works"
   (:require
+   [clojure.math :as math]
    [quil-party.lib.preview :refer [display-params]]
    [quil.core :as q]
    [quil.middleware :as m]))
-
-;; "the fun zone"
-(def resolution 100) ;; how many points the circles/spirals are made of
-(def outer-radius 120) ;; radius of outer container circle (not rendered)
-(def num-arcs 9) ;; number of subdivisions for the outer container circle
-(def num-circles 13) ;; circles per arc
-(def min-radius 4)
-(def max-radius 16)
 
 ;; basic file parameters
 (def sketch-width 800)
@@ -64,15 +57,16 @@
 
 (defn draw-circle
   "draws a circle shape"
-  [center-point radius]
-  (q/begin-shape)
-  (dotimes [i resolution]
-    (let [[x y] center-point
-          angle (* 2 Math/PI (/ i resolution))
-          x1 (+ x (* radius (Math/cos angle)))
-          y1 (+ y (* radius (Math/sin angle)))]
-      (q/vertex x1 y1)))
-  (q/end-shape :close))
+  [state center-point radius]
+  (let [resolution (:resolution state)]
+    (q/begin-shape)
+    (dotimes [i resolution]
+      (let [[x y] center-point
+            angle (* 2 Math/PI (/ i resolution))
+            x1 (+ x (* radius (Math/cos angle)))
+            y1 (+ y (* radius (Math/sin angle)))]
+        (q/vertex x1 y1)))
+    (q/end-shape :close)))
 
 (defn draw-spiral
   "draws a tight space-filling spiral suitable for a pen plotter to use as a filled circle"
@@ -102,8 +96,10 @@
   "Draws 13 circles along the arc path, with the apex circle in the middle.
    The circles decrease in size as they move away from the apex circle.
    Each circle's circumference touches the next circle's circumference without overlapping."
-  [[cx cy] r start-angle direction]
-  (let [num-circles 13
+  [state [cx cy] r start-angle direction]
+  (let [num-circles (:num-circles state)
+        min-radius (:min-radius state)
+        max-radius (:max-radius state)
         apex-index (quot num-circles 2)  ;; Middle index (6 for 13 circles)
 
         ;; Calculate the radius step between circles
@@ -143,14 +139,14 @@
 
 (defn draw-arc
   "Draws an arc from start to end that describes 2/3rds the circumference of a circle formed around an equilateral triangle formed of the start, end, and a third point equidistant to both"
-  [start end]
+  [state start end]
   (let [third-point (calculate-third-point start end)
         [cx cy] (calculate-circumcircle-center start end third-point)
         r (calculate-circumcircle-radius start end)
         start-angle (calculate-start-angle start [cx cy])
         direction (determine-arc-direction start end third-point)]
 
-    (draw-arc-circles [cx cy] r start-angle direction)))
+    (draw-arc-circles state [cx cy] r start-angle direction)))
 
 (defn subdivide-circle
   "Returns a vector of points ([x y] vectors) representing equal subdivisions of the circumference of a circle centered at center-point"
@@ -166,30 +162,32 @@
 
 (defn draw
   "main drawing function"
-  []
+  [state]
   (q/stroke-weight 1.5)
   (q/stroke 0)
   (q/fill nil)
 
   ;; create arcs
-  (let [points (subdivide-circle [center-x center-y] outer-radius num-arcs)]
+  (let [outer-radius (:outer-radius state)
+        num-arcs (:num-arcs state)
+        points (subdivide-circle [center-x center-y] outer-radius num-arcs)]
     (doseq [point points]
-      (draw-arc [center-x center-y] point))))
+      (draw-arc state [center-x center-y] point))))
 
 
 ;; .-"-.     .-"-.     .-"-.     .-"-.     .-"-.     .-"-. quil boilerplate .-"-.     .-"-.     .-"-.     .-"-.     .-"-.
 ;;      "-.-"     "-.-"     "-.-"     "-.-"     "-.-"                            "-.-"     "-.-"     "-.-"     "-.-"    
+
 (defn setup
   "init state"
   []
   (q/frame-rate 30)
-  {:size min-radius
-   :num-points resolution})
-
-(defn update-state
-  [state]
-  {:size (+ (:size state) 1)
-   :num-points (:num-points state)})
+  {:resolution 100
+   :outer-radius 120
+   :num-arcs 9
+   :num-circles 13
+   :min-radius 4
+   :max-radius 16})
 
 (defn draw-parameter-background
   "Draws the background for the parameter display section"
@@ -201,51 +199,84 @@
 
 (defn get-fun-zone-params
   "Returns a vector of parameter name-value pairs from the 'fun zone' section"
-  []
-  [[:resolution resolution]
-   [:outer-radius outer-radius]
-   [:num-arcs num-arcs]
-   [:num-circles num-circles]
-   [:min-radius min-radius]
-   [:max-radius max-radius]])
+  [state]
+  #_[[:resolution (:resolution state)]
+     [:outer-radius (:outer-radius state)]
+     [:num-arcs (:num-arcs state)]
+     [:num-circles (:num-circles state)]
+     [:min-radius (:min-radius state)]
+     [:max-radius (:max-radius state)]]
+  [[:num-arcs (:num-arcs state)]
+   [:max-radius (:max-radius state)]
+   [:outer-radius (:outer-radius state)]])
 
 (defn preview
   "preview window"
-  [_state]
+  [state]
   (q/background 255)
-  (draw)
+  (draw state)
 
   ;; parameter review section
   (draw-parameter-background)
 
   ;; write parameter name and current value for any defs in "the fun zone"
-  (let [fun-zone-params (get-fun-zone-params)]
+  (let [fun-zone-params (get-fun-zone-params state)]
     (display-params fun-zone-params 20 (+ sketch-height 12) 20)))
 
 (defn export
   "saves svg to a file"
-  [_state]
+  [state]
   (let [name "crop-circle"
         frame-num (q/frame-count)
         svg (str "svg/" name "-" frame-num ".svg")
         gr (q/create-graphics sketch-width sketch-height :svg svg)]
     (q/with-graphics gr
-      (draw))
+      (draw state))
     (q/save gr)))
 
 (defn key-pressed
-  "trigger export by pressing up"
+  "Handle key press events"
   [state event]
-  (when (= (:key event) :up)
-    (export state))
-  state)
+  (let [raw-key (:raw-key event)]
+    (cond
+      ;; save svg: UP arrow
+      (= (:key event) :up)
+      (do
+        (export state)
+        state)
+
+      ;; decrease num-arcs: LEFT arrow
+      (= (:key event) :left)
+      (update state :num-arcs dec)
+
+      ;; increase num-arcs: RIGHT arrow 
+      (= (:key event) :right)
+      (update state :num-arcs inc)
+
+      ;; increase biggest spiral size: period
+      (= raw-key \.)
+      (update state :max-radius inc)
+
+      ;; decrease: biggest spiral: comma
+      (= raw-key \,)
+      (update state :max-radius dec)
+
+      ;; decrease overall size: A
+      (= raw-key \a)
+      (update state :outer-radius inc) 
+
+      ;; decrease overall size: S
+      (= raw-key \s)
+      (update state :outer-radius inc)
+
+      :else
+      state)))
 
 (q/defsketch quil-party
   :title "press up arrow to save svg"
   :size [sketch-width preview-height]
   :setup setup
   :draw preview
-  :update update-state
   :key-pressed key-pressed
   :middleware [m/fun-mode]
   :features [:keep-on-top])

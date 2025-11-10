@@ -12,7 +12,7 @@
   (q/stroke 0)
   (q/fill 0)
   (q/text-size 14)
-  (q/text "current parameters:" x-start y-start)
+  (q/text "the fun zone:" x-start y-start)
   
   (doseq [[i [param-name param-value]] (map-indexed vector params)]
     (let [y-pos (+ y-start 20 (* i line-height))]
