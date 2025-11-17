@@ -267,7 +267,7 @@
 
       ;; decrease overall size: S
       (= raw-key \s)
-      (update state :outer-radius inc)
+      (update state :outer-radius dec)
 
       :else
       state)))
