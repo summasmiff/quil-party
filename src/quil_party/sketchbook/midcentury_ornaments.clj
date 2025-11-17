@@ -20,76 +20,38 @@
          (range num-axis))
     []))
 
-(defn generate-bezier-curve
-  "Generate points along a bezier curve between start and end points with given control points"
-  [start-x start-y control-x1 control-y1 control-x2 control-y2 end-x end-y num-points]
-  (map (fn [t]
-         (let [t (/ t (dec num-points))]
-           [(q/bezier-point start-x control-x1 control-x2 end-x t)
-            (q/bezier-point start-y control-y1 control-y2 end-y t)]))
-       (range num-points)))
-
-(defn generate-curve-to-axis
-  "Generate a curve from current position to the next axis"
-  [center-x current-y next-axis-y max-width waist-width slope]
-  (let [mid-y (/ (+ current-y next-axis-y) 2)
-        
-        ;; First curve: from current point to the widest point
-        control-y1 (+ current-y (* slope 10))
-        control-y2 (- mid-y (* slope 5))
-        control-x1 (+ center-x (* max-width 0.7))
-        control-x2 (+ center-x max-width)
-        curve1-points (generate-bezier-curve 
-                        center-x current-y 
-                        control-x1 control-y1 
-                        control-x2 control-y2 
-                        (+ center-x max-width) mid-y 
-                        11)
-        
-        ;; Second curve: from the widest point to the axis
-        control-y3 (+ mid-y (* slope 5))
-        control-y4 (- next-axis-y (* slope 10))
-        control-x3 (+ center-x max-width)
-        control-x4 (+ center-x waist-width)
-        curve2-points (generate-bezier-curve 
-                        (+ center-x max-width) mid-y 
-                        control-x3 control-y3 
-                        control-x4 control-y4 
-                        center-x next-axis-y 
-                        11)]
-    (concat (rest curve1-points) (rest curve2-points))))
-
-(defn generate-curve-to-end
-  "Generate a curve from current position to the end point"
-  [center-x current-y end-y waist-width slope]
-  (let [control-y1 (+ current-y (* slope 10))
-        control-y2 (- end-y (* slope 10))
-        control-x1 (+ center-x waist-width)
-        control-x2 (+ center-x waist-width)]
-    (generate-bezier-curve 
-     center-x current-y 
-     control-x1 control-y1 
-     control-x2 control-y2 
-     center-x end-y 
-     21)))
-
-(defn generate-right-half
-  "Generate the right half of the ornament"
+(defn generate-hemispherical-curve
+  "Generate points along a more rounded, nearly hemispherical curve"
   [center-x start-y end-y axis-y-positions max-width waist-width slope]
-  (loop [points [[center-x start-y]]  ; Start at the top of the vertical pole
-         remaining-axes axis-y-positions
-         current-y start-y]
-    (if (empty? remaining-axes)
-      ;; If no more axes, create a curve to the end point
-      (let [curve-points (generate-curve-to-end center-x current-y end-y waist-width slope)]
-        (concat points (rest curve-points)))
-      
-      ;; Otherwise, create a curve to the next axis
-      (let [next-axis-y (first remaining-axes)
-            curve-points (generate-curve-to-axis center-x current-y next-axis-y max-width waist-width slope)]
-        (recur (concat points curve-points)
-               (rest remaining-axes)
-               next-axis-y)))))
+  (let [axis-positions (concat [start-y] axis-y-positions [end-y])
+        total-segments (dec (count axis-positions))]
+    (loop [points (transient [])
+           current-idx 0
+           current-y start-y]
+      (if (>= current-idx total-segments)
+        (persistent! points)
+        (let [next-y (nth axis-positions (inc current-idx))
+              segment-height (- next-y current-y)]
+          (if (zero? segment-height)
+            (recur points (inc current-idx) next-y)
+            (let [;; Determine amplitude based on segment position
+                  amplitude (if (or (= current-y start-y) (= next-y end-y))
+                              waist-width
+                              max-width)
+                  adjusted-amplitude (* amplitude (+ 1 (* slope 0.1)))
+                  ;; Generate points for this segment
+                  segment-points (map (fn [i]
+                                        (let [t (* q/PI (/ i segment-height))  ; t from 0 to π
+                                              y (+ current-y i)
+                                              x-offset (* adjusted-amplitude (q/sin t))]
+                                          [(+ center-x x-offset) y]))
+                                      ;; Skip first point for non-start segments
+                                      (if (zero? current-idx)
+                                        (range (inc segment-height))
+                                        (range 1 (inc segment-height))))]
+              (recur (reduce conj! points segment-points)
+                     (inc current-idx)
+                     next-y))))))))
 
 (defn mirror-points
   "Create the left half by mirroring the right half across the center-x line"
@@ -108,8 +70,8 @@
    The line should curve in again after accomodating each axis line but never get closer to the vertical pole than the value kept in state as waist-width.
    The curve should create a full cubic bezier between the start point and the axis before connecting to an end point. "
   [state]
-  (let [start-y (second (:start-point state))
-        end-y (second (:end-point state))
+  (let [start-y (:start-y state)
+        end-y (:end-y state)
         center-x (/ sketch-width 2)
         num-axis (:num-axis state)
         max-width (:max-width state)
@@ -120,7 +82,7 @@
         axis-y-positions (calculate-axis-positions start-y end-y num-axis)
         
         ;; Generate the right half of the ornament
-        right-half (generate-right-half center-x start-y end-y axis-y-positions max-width waist-width slope)
+        right-half (generate-hemispherical-curve center-x start-y end-y axis-y-positions max-width waist-width slope)
         
         ;; Create the left half by mirroring the right half
         left-half (mirror-points center-x right-half)]
@@ -149,9 +111,9 @@
   "init state"
   []
   (q/frame-rate 30)
-  {:start-point [(/ sketch-width 2) 100]
+  {:start-y 100
    :num-axis 2
-   :end-point [(/ sketch-width 2) 500]
+   :end-y 500
    :max-width 36
    :waist-width 12
    :slope 4})
