@@ -77,9 +77,12 @@
                 leaf-angle (q/radians clamped-angle)
                 rotation (if is-right leaf-angle (- leaf-angle))
                 ;; Scale calculation
-                progress (/ (float i) (max 1 (dec num-leaves)))
-                sine-wave-scale (q/sin (* progress q/PI))
-                current-scale (+ 0.2 (* 1.3 sine-wave-scale))
+                ;; Calculate how far up the stem we are (0.0 at bottom, 1.0 at top)
+                ;; half-height is 200, frond-length is 400
+                dist-from-bottom (- half-height current-y)
+                y-progress (/ dist-from-bottom frond-length)
+                sine-wave-scale (q/sin (* y-progress q/PI))
+                current-scale (+ 0.1 (* 1.3 sine-wave-scale))
                 scaled-leaf-size (* leaf-size current-scale)
                 dynamic-spacing (* base-spacing (+ 0.75 sine-wave-scale))]
 
