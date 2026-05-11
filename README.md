@@ -8,15 +8,15 @@ Doodling with the [Quil library](http://quil.info/) in Clojure
 ## Usage
 - Jack-in using Leiningen
 - sketches live in `./src/quil_party`
-- Evaluate (q/defsketch) to open visualizer
+- Evaluate (q/defsketch) to open visualizer (shift ctrl opt)
 - Mess around: update & eval code called by the draw loop, save svgs when it looks cool, etc
 
 In order to call the functions directly in the REPL, they need to be wrapped with the current sketch:
 ```
-(quil.applet/with-applet quil-party.basic-svg 
+(quil.applet/with-applet quil-party.basic-svg
     (quil.core/no-loop)) ;; pause the draw loop
 
-(quil.applet/with-applet quil-party.basic-svg 
+(quil.applet/with-applet quil-party.basic-svg
     (quil.core/start-loop)) ;; restart the loop
 ```
 

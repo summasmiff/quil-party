@@ -14,3 +14,4 @@ todo.md
 .calva/output-window
 .lsp/.cache/db.transit.json
 .DS_Store
+.calva/repl.calva-repl
