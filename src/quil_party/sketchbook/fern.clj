@@ -19,8 +19,10 @@
 (defn setup
   "Initialize state"
   []
-  (q/frame-rate 1)
-  {})
+  (q/frame-rate 30)
+  {:leaf-size 40
+   :base-spacing 9
+   :num-leaves 32})
 
 (defn draw-leaf [starting-x starting-y leaf-size]
   (let [leaf-width (/ leaf-size 4)]
@@ -46,17 +48,17 @@
 
       (q/end-shape :close))))
 
-(defn draw-fern
-  []
+(defn draw-fern [state]
   (q/stroke 0)
   (q/stroke-weight 1.5)
 
-  ;; Center drawing in preview
-  (q/with-translation [(/ (q/width) 2) (/ sketch-height 2)]
-    (let [half-height (/ frond-length 2)
-          leaf-size 40
-          base-spacing 9
-          num-leaves 32]
+  (let [half-height (/ frond-length 2)
+        leaf-size (:leaf-size state)
+        base-spacing (:base-spacing state)
+        num-leaves (:num-leaves state)]
+
+    ;; Center drawing in preview
+    (q/with-translation [(/ (q/width) 2) (/ sketch-height 2)]
 
       ;; Draw main frond
       (q/line 0 (- half-height) 0 half-height)
@@ -67,12 +69,11 @@
         (when (< i num-leaves)
           (let [;; Alternate sides: even i = Right, odd i = Left
                 is-right (even? i)
-                ;; Decrease angle as range increases to make angle more horizontal
+                ;; Angles
                 radians (- 90 (* i 3))
                 leaf-angle (min (q/radians radians) (q/radians 90))
-                ;; Rotation = side and angle
                 rotation (if is-right leaf-angle (- leaf-angle))
-                ;; Scale leaf linearly
+                ;; Scale calculation
                 progress (/ (float i) (max 1 (dec num-leaves)))
                 sine-wave-scale (q/sin (* progress q/PI))
                 current-scale (+ 1.0 sine-wave-scale)
@@ -92,30 +93,54 @@
             (recur (inc i) (- current-y dynamic-spacing))))))))
 
 (defn preview
-  [_]
-  (draw-fern)
+  [state]
+  (q/background 255 255 255) ;; white bg
+  (draw-fern state)
+
   (q/stroke 200)
   (q/line 0 sketch-height sketch-width sketch-height)
+
   (q/stroke 0)
   (q/fill 0)
   (q/text-size 14)
-  (q/text "Press UP arrow to save SVG" 20 (+ sketch-height 20)))
+
+  (q/text "Press UP arrow to save SVG" 20 (+ sketch-height 20))
+
+  (q/text (str "Leaf Size: " (:leaf-size state) " [ / ]") 300 (+ sketch-height 20))
+  (q/text (str "Spacing: "   (:base-spacing state) " - / =") 300 (+ sketch-height 40))
+  (q/text (str "Count: "     (:num-leaves state) " , / .") 500 (+ sketch-height 20)))
 
 (defn export
-  [_]
+  [state]
   (let [name "fern"
         frame-num (q/frame-count)
         svg (str "svg/" name "-" frame-num ".svg")
         gr (q/create-graphics sketch-width sketch-height :svg svg)]
     (q/with-graphics gr
       (q/stroke 0)
-      (draw-fern))
+      (draw-fern state))
     (q/save gr)))
 
 (defn key-pressed [state event]
-  (when (= (:key event) :up)
-    (export state))
-  state)
+  (let [k (:key event)]
+    (cond
+      ;; Export
+      (= k :up) (do (export state) state)
+
+      ;; Adjust Leaf Size
+      (= k (keyword "]")) (update state :leaf-size + 5)
+      (= k (keyword "[")) (update state :leaf-size (fn [x] (max 5 (- x 5))))
+
+      ;; Adjust Base Spacing
+      (= k (keyword "=")) (update state :base-spacing + 1)
+      (= k (keyword "-")) (update state :base-spacing (fn [x] (max 1 (- x 1))))
+
+      ;; Adjust Number of Leaves
+      (= k (keyword ".")) (update state :num-leaves + 1)
+      (= k (keyword ",")) (update state :num-leaves (fn [x] (max 0 (- x 1))))
+
+      ;; Default
+      :else state)))
 
 (q/defsketch fern
   :title "fern"
