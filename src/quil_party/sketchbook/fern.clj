@@ -12,6 +12,7 @@
 (def rows 3)
 ;; Calculate frond length so it fits nicely in the grid rows
 (def frond-length (/ sketch-height (- rows 0.5)))
+(def hatch-spacing 3.0)
 
 (defn debug
   [value]
@@ -27,29 +28,53 @@
    :base-spacing 5
    :num-leaves 32})
 
+(defn bezier-point [t p0 p1 p2 p3]
+  (let [u (- 1 t)
+        tt (* t t)
+        uu (* u u)]
+    (+ (* uu u p0)
+       (* 3 uu t p1)
+       (* 3 u tt p2)
+       (* tt t p3))))
+
+(defn find-x-at-y [target-y y0 y1 y2 y3 x0 x1 x2 x3]
+  (loop [low 0.0
+         high 1.0]
+    (let [mid (/ (+ low high) 2.0)
+          curr-y (bezier-point mid y0 y1 y2 y3)]
+      (if (< (Math/abs (- curr-y target-y)) 0.1)
+        (bezier-point mid x0 x1 x2 x3)
+        (if (> curr-y target-y)
+          (recur mid high)
+          (recur low mid))))))
+
 (defn draw-leaf [starting-x starting-y leaf-size]
   (let [leaf-width (/ leaf-size 4)]
     (q/no-fill)
     (q/with-translation [starting-x starting-y]
-      (q/begin-shape)
-      ;; Start at the stem
-      (q/vertex 0 0)
 
-      ;; Draw Left Side (From stem curving out to the tip)
-      ;; Control Point 1: Pull left from tip to middle of the leaf height
-      ;; Control Point 2: Arrive at the tip (centered)
+      ;; 1. Draw Outline
+      (q/begin-shape)
+      (q/vertex 0 0)
       (q/bezier-vertex (- leaf-width) (- (/ leaf-size 2))
                        0                 (- leaf-size)
                        0                 (- leaf-size))
-
-      ;; Draw Right Side (Curving back to the stem)
-      ;; Control Point 1: Pull right from tip to the middle of the leaf height
-      ;; Control Point 2: Arrive at the stem (centered)
       (q/bezier-vertex leaf-width  (- (/ leaf-size 2))
                        0           0
                        0           0)
+      (q/end-shape :close)
 
-      (q/end-shape :close))))
+      ;; 2. Draw Hatching
+      (doseq [y (range (- leaf-size) 0 hatch-spacing)]
+        (let [x-left (find-x-at-y y
+                                  0 (- (/ leaf-size 2)) (- leaf-size) (- leaf-size)
+                                  0 (- leaf-width) 0 0)
+              x-right (- x-left)
+              width (- x-right x-left)]
+
+          ;; Only draw if the line is wider than the spacing
+          (when (> width hatch-spacing)
+            (q/line x-left y x-right y)))))))
 
 (defn draw-fern [state]
   (q/stroke 0)
