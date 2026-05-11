@@ -62,21 +62,24 @@
 
       ;; Draw main frond
       (q/line 0 (- half-height) 0 half-height)
-
       ;; Loop to draw leaves down the sides
       (loop [i 0
              current-y half-height]
-        (when (< i num-leaves)
+        (when (and (< i num-leaves) (> current-y (- half-height)))
           (let [;; Alternate sides: even i = Right, odd i = Left
                 is-right (even? i)
                 ;; Angles
-                radians (- 90 (* i 3))
-                leaf-angle (min (q/radians radians) (q/radians 90))
+                ;; Calculate degrees first
+                angle-deg (- 90 (* i 3))
+                ;; Clamp it between 0 and 90
+                clamped-angle (max 0 (min 90 angle-deg))
+                ;; Convert to radians
+                leaf-angle (q/radians clamped-angle)
                 rotation (if is-right leaf-angle (- leaf-angle))
                 ;; Scale calculation
                 progress (/ (float i) (max 1 (dec num-leaves)))
                 sine-wave-scale (q/sin (* progress q/PI))
-                current-scale (+ 1.0 sine-wave-scale)
+                current-scale (+ 0.2 (* 1.3 sine-wave-scale))
                 scaled-leaf-size (* leaf-size current-scale)
                 dynamic-spacing (* base-spacing (+ 0.75 sine-wave-scale))]
 
@@ -86,7 +89,7 @@
               (q/with-rotation [rotation]
                 ;; Draw the leaf at (0,0) because we already translated here
                 (draw-leaf 0 0 scaled-leaf-size)
-                (debug i)))
+                #_(debug i)))
 
             ;; Recurse: Move up the stem by the dynamic spacing
             ;; We subtract because y=0 is the center and y decreases going up
