@@ -10,6 +10,12 @@
 ;; fern parameters
 (def frond-length (* 2 (/ sketch-height 3))) ;; 2/3 of screen
 
+(defn debug
+  [value]
+  (q/fill 255 0 0)
+  (q/text-size 16)
+  (q/text (str value) 5 -5))
+
 (defn setup
   "Initialize state"
   []
@@ -18,6 +24,7 @@
 
 (defn draw-leaf [starting-x starting-y leaf-size]
   (let [leaf-width (/ leaf-size 4)]
+    (q/no-fill)
     (q/with-translation [starting-x starting-y]
       (q/begin-shape)
       ;; Start at the stem
@@ -43,7 +50,6 @@
   []
   (q/stroke 0)
   (q/stroke-weight 1.5)
-  (q/no-fill)
 
   ;; Center drawing in preview
   (q/with-translation [(/ (q/width) 2) (/ sketch-height 2)]
@@ -69,14 +75,19 @@
               radians (- 90 (* i 3))
               leaf-angle (min (q/radians radians) (q/radians 90))
               ;; Rotation = side and angle
-              rotation (if is-right leaf-angle (- leaf-angle))]
+              rotation (if is-right leaf-angle (- leaf-angle))
+              ;; Scale leaf linearly
+              progress (/ (float i) (max 1 (dec num-leaves)))
+              scale (- 2.0 progress)
+              scaled-leaf-size (* leaf-size scale)]
 
           ;; Move to the spot on the stem
           (q/with-translation [0 y]
             ;; Rotate the canvas so the leaf points outward
             (q/with-rotation [rotation]
               ;; Draw the leaf at (0,0) because we already translated here
-              (draw-leaf 0 0 leaf-size))))))))
+              (draw-leaf 0 0 scaled-leaf-size)
+              (debug i))))))))
 
 (defn preview
   [_]
