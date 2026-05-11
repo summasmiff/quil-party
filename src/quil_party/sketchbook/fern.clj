@@ -55,39 +55,41 @@
   (q/with-translation [(/ (q/width) 2) (/ sketch-height 2)]
     (let [half-height (/ frond-length 2)
           leaf-size 40
-          leaf-spacing 16
-          num-leaves leaf-spacing]
+          base-spacing 9
+          num-leaves 32]
 
       ;; Draw main frond
       (q/line 0 (- half-height) 0 half-height)
 
-      ;; Draw top leaf
-      (draw-leaf 0 (- half-height) leaf-size)
-
       ;; Loop to draw leaves down the sides
-      (doseq [i (range num-leaves)]
-        (let [;; Calculate Y: Start near the top and move down
-              y (- (/ half-height 3)
-                   (* i leaf-spacing))
-              ;; Alternate sides: even i = Right, odd i = Left
-              is-right (even? i)
-              ;; Decrease angle as range increases to make angle more horizontal
-              radians (- 90 (* i 3))
-              leaf-angle (min (q/radians radians) (q/radians 90))
-              ;; Rotation = side and angle
-              rotation (if is-right leaf-angle (- leaf-angle))
-              ;; Scale leaf linearly
-              progress (/ (float i) (max 1 (dec num-leaves)))
-              scale (- 2.0 progress)
-              scaled-leaf-size (* leaf-size scale)]
+      (loop [i 0
+             current-y half-height]
+        (when (< i num-leaves)
+          (let [;; Alternate sides: even i = Right, odd i = Left
+                is-right (even? i)
+                ;; Decrease angle as range increases to make angle more horizontal
+                radians (- 90 (* i 3))
+                leaf-angle (min (q/radians radians) (q/radians 90))
+                ;; Rotation = side and angle
+                rotation (if is-right leaf-angle (- leaf-angle))
+                ;; Scale leaf linearly
+                progress (/ (float i) (max 1 (dec num-leaves)))
+                sine-wave-scale (q/sin (* progress q/PI))
+                current-scale (+ 1.0 sine-wave-scale)
+                scaled-leaf-size (* leaf-size current-scale)
+                dynamic-spacing (* base-spacing (+ 0.75 sine-wave-scale))]
 
-          ;; Move to the spot on the stem
-          (q/with-translation [0 y]
-            ;; Rotate the canvas so the leaf points outward
-            (q/with-rotation [rotation]
-              ;; Draw the leaf at (0,0) because we already translated here
-              (draw-leaf 0 0 scaled-leaf-size)
-              (debug i))))))))
+            ;; Move to the spot on the stem
+            (q/with-translation [0 current-y]
+              ;; Rotate the canvas so the leaf points outward
+              (q/with-rotation [rotation]
+                ;; Draw the leaf at (0,0) because we already translated here
+                (draw-leaf 0 0 scaled-leaf-size)
+                (debug i)))
+
+            ;; Recurse: Move up the stem by the dynamic spacing
+            ;; We subtract because y=0 is the center and y decreases going up
+            (recur (inc i) (- current-y dynamic-spacing))))))))
 
 (defn preview
   [_]
