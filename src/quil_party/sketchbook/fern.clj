@@ -110,32 +110,33 @@
   ;; Draw the rachis (stem)
   (q/line 0 start-y 0 end-y)
 
-  (loop [i 0
-         current-y start-y]
-    (when (and (< i 50)
-               (if (neg? direction)
-                 (> current-y end-y)
-                 (< current-y end-y)))
+  (let [offset (* length 0.05)]
+    (loop [i 0
+           current-y (+ start-y (* direction offset))]
+      (when (and (< i 50)
+                 (if (neg? direction)
+                   (> current-y end-y)
+                   (< current-y end-y)))
 
-      (let [dist-traveled (Math/abs (- start-y current-y))
-            progress (/ dist-traveled length)
-            attrs (leaflet-attrs progress leaf-size base-spacing)
-            leaf-radians (q/radians (:angle attrs))
-            rotation (if (even? i) leaf-radians (- leaf-radians))
-            size (:size attrs)]
+        (let [dist-traveled (Math/abs (- start-y current-y))
+              progress (/ dist-traveled length)
+              attrs (leaflet-attrs progress leaf-size base-spacing)
+              leaf-radians (q/radians (:angle attrs))
+              rotation (if (even? i) leaf-radians (- leaf-radians))
+              size (:size attrs)]
 
-        (q/with-translation [0 current-y]
-          (q/with-rotation [rotation]
-            (if (and (> size max-pinna-size) (< depth 1))
-              ;; RECURSIVE CASE: Pinnation
-              (let [sub-length size
-                    sub-leaf-size (* size 0.06)
-                    sub-spacing (* size 0.02)]
-                (draw-frond sub-length sub-leaf-size sub-spacing 0 (- sub-length) -1 (inc depth)))
+          (q/with-translation [0 current-y]
+            (q/with-rotation [rotation]
+              (if (and (> size max-pinna-size) (< depth 1))
+                ;; RECURSIVE CASE: Pinnation
+                (let [sub-length size
+                      sub-leaf-size (* size 0.06)
+                      sub-spacing (* size 0.02)]
+                  (draw-frond sub-length sub-leaf-size sub-spacing 0 (- sub-length) -1 (inc depth)))
 
-              ;; BASE CASE
-              (draw-leaf 0 0 size))))
-        (recur (inc i) (+ current-y (* direction (:spacing attrs))))))))
+                ;; BASE CASE
+                (draw-leaf 0 0 size))))
+          (recur (inc i) (+ current-y (* direction (:spacing attrs)))))))))
 
 (defn draw-fern [state]
   (let [half-height (/ frond-length 2)
