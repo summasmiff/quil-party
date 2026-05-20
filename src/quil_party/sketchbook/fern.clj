@@ -22,6 +22,7 @@
    :base-spacing leaf-spacing
    :num-leaves num-leaves})
 
+;; Leaflet Drawing
 (defn bezier-point
   "Helper for hatching"
   [t p0 p1 p2 p3]
@@ -51,7 +52,6 @@
         hatch-spacing 3]
     (q/no-fill)
     (q/with-translation [starting-x starting-y]
-
       ;; 1. Draw Outline
       (q/begin-shape)
       (q/vertex 0 0)
@@ -75,6 +75,41 @@
           (when (> width hatch-spacing)
             (q/line x-left y x-right y)))))))
 
+;; Fern Drawing
+(defn y-progress [current-y]
+  (let [half-height (/ frond-length 2)
+        dist-from-bottom (- half-height current-y)]
+    (/ dist-from-bottom frond-length)))
+
+(defn leaflet-attrs [y-progress leaf-size base-spacing]
+  (let [;; ANGLE CALCULATION
+        ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
+        ;; Uses 'exponent' to define a curve to define how quickly the leaflets "falloff" towards horizontal
+        ;; 1.0 = Linear (current behavior)
+        ;; 0.5 = Square Root (stays flat longer)
+        ;; 0.2 = Very flat (almost 90 degrees until the very tip)
+        exponent 0.3
+        bottom-factor (q/pow (- 1 y-progress) exponent)
+        angle-deg (* 90 bottom-factor)
+        clamped-angle (max 10 (min 90 angle-deg))
+        ;; SCALE CALCULATION
+        sine-wave (q/sin (* y-progress q/PI))
+        scale (+ 0.1 (* 1.3 sine-wave))
+        actual-leaf-size (* leaf-size scale)
+        spacing (* base-spacing (+ 0.75 sine-wave))]
+    {:angle clamped-angle
+     :size actual-leaf-size
+     :spacing spacing}))
+
+(defn render-leaflet [y attrs is-right]
+  (let [leaf-radians (q/radians (:angle attrs))
+        rotation (if is-right leaf-radians (- leaf-radians))
+        size (:size attrs)]
+
+    (q/with-translation [0 y]
+      (q/with-rotation [rotation]
+        (draw-leaf 0 0 size)))))
+
 (defn draw-fern [state]
   (q/stroke 0)
   (q/stroke-weight 1.5)
@@ -84,53 +119,19 @@
         base-spacing (:base-spacing state)
         num-leaves (:num-leaves state)]
 
-    ;; Draw main frond
+    ;; Draw rachis (fern spine)
     (q/line 0 (- half-height) 0 half-height)
-    ;; Loop to draw leaves down the sides
+    ;; Loop to draw leaflets down the sides
     (loop [i 0
            current-y half-height]
       (when (and (< i num-leaves) (> current-y (- half-height)))
         (let [;; Alternate sides: even i = Right, odd i = Left
               is-right (even? i)
-
-              ;; 1. Calculate leaf position
               ;; y-progress is 0.0 at bottom, 1.0 at top
-              dist-from-bottom (- half-height current-y)
-              y-progress (/ dist-from-bottom frond-length)
-
-              ;; 2. Leaf angles based on stem position
-              ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
-              ;; Uses 'exponent' to define a curve to define how quickly the leaflets "falloff" towards horizontal
-              ;; 1.0 = Linear (current behavior)
-              ;; 0.5 = Square Root (stays flat longer)
-              ;; 0.2 = Very flat (almost 90 degrees until the very tip)
-              exponent 0.3
-              bottom-factor (q/pow (- 1 y-progress) exponent)
-              angle-deg (* 90 bottom-factor)
-
-              ;; Clamp angle between 0 and 90
-              clamped-angle (max 10 (min 90 angle-deg))
-
-              ;; Convert to radians
-              leaf-angle (q/radians clamped-angle)
-              rotation (if is-right leaf-angle (- leaf-angle))
-
-              ;; 3. Leaf scale calculation
-              sine-wave-scale (q/sin (* y-progress q/PI))
-              current-scale (+ 0.1 (* 1.3 sine-wave-scale))
-              scaled-leaf-size (* leaf-size current-scale)
-              dynamic-spacing (* base-spacing (+ 0.75 sine-wave-scale))]
-
-          ;; Move to the spot on the stem
-          (q/with-translation [0 current-y]
-            ;; Rotate the canvas so the leaf points outward
-            (q/with-rotation [rotation]
-              ;; Draw the leaf
-              (draw-leaf 0 0 scaled-leaf-size)
-              (d/debug i)))
-
-          ;; Recurse
-          (recur (inc i) (- current-y dynamic-spacing)))))))
+              y-progress (y-progress current-y)
+              attrs (leaflet-attrs y-progress leaf-size base-spacing)]
+          (render-leaflet current-y attrs is-right)
+          (recur (inc i) (- current-y (:spacing attrs))))))))
 
 (defn preview
   [state]
@@ -157,7 +158,7 @@
         svg (str "svg/" name "-" frame-num ".svg")
         gr (q/create-graphics sketch-width sketch-height :svg svg)]
     (q/with-graphics gr
-      (draw-wallpaper state))
+      (draw-fern state))
     (q/save gr)))
 
 (defn key-pressed [state event]
