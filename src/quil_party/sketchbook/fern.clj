@@ -1,6 +1,8 @@
 (ns quil-party.sketchbook.fern
   (:require [quil.core :as q]
-            [quil.middleware :as m]))
+            [quil.middleware :as m]
+            [quil-party.lib.debug :as d]))
+
 ;; boring constants
 (def sketch-width 600)
 (def sketch-height 700)
@@ -11,12 +13,6 @@
 (def leaf-spacing 8)
 (def num-leaves 65)
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
-
-(defn debug
-  [value]
-  (q/fill 255 0 0)
-  (q/text-size 16)
-  (q/text (str value) 5 -5))
 
 (defn setup
   "Initialize state"
@@ -51,7 +47,8 @@
           (recur low mid))))))
 
 (defn draw-leaf [starting-x starting-y leaf-size]
-  (let [leaf-width (/ leaf-size 4)]
+  (let [leaf-width (/ leaf-size 4)
+        hatch-spacing 3]
     (q/no-fill)
     (q/with-translation [starting-x starting-y]
 
@@ -103,7 +100,7 @@
 
               ;; 2. Leaf angles based on stem position
               ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
-              ;; Uses exponent to define a curve to define how quickly the leaflets "falloff" towards horizontal
+              ;; Uses 'exponent' to define a curve to define how quickly the leaflets "falloff" towards horizontal
               ;; 1.0 = Linear (current behavior)
               ;; 0.5 = Square Root (stays flat longer)
               ;; 0.2 = Very flat (almost 90 degrees until the very tip)
@@ -130,7 +127,7 @@
             (q/with-rotation [rotation]
               ;; Draw the leaf
               (draw-leaf 0 0 scaled-leaf-size)
-              #_(debug i)))
+              (d/debug i)))
 
           ;; Recurse
           (recur (inc i) (- current-y dynamic-spacing)))))))
