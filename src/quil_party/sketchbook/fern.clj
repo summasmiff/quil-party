@@ -10,7 +10,8 @@
 ;; FERN INITIAL STATE
 (def frond-length (- sketch-height 20))
 (def leaf-size 50)
-(def leaf-spacing 8)
+(def max-pinna-size 20)
+(def leaf-spacing 10)
 (def num-leaves 50)
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
@@ -76,11 +77,6 @@
             (q/line x-left y x-right y)))))))
 
 ;; Fern Drawing
-(defn y-progress [current-y]
-  (let [half-height (/ frond-length 2)
-        dist-from-bottom (- half-height current-y)]
-    (/ dist-from-bottom frond-length)))
-
 (defn angle-attrs [y-progress]
   ;; ANGLE CALCULATION
   ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
@@ -107,37 +103,46 @@
      :size actual-leaf-size
      :spacing spacing}))
 
-(defn render-leaflet [y attrs is-right]
-  (let [leaf-radians (q/radians (:angle attrs))
-        rotation (if is-right leaf-radians (- leaf-radians))
-        size (:size attrs)]
+(defn draw-frond [length leaf-size base-spacing start-y end-y direction depth]
+  (q/stroke 0)
+  (q/stroke-weight (if (zero? depth) 1.5 0.8))
 
-    (q/with-translation [0 y]
-      (q/with-rotation [rotation]
-        (draw-leaf 0 0 size)))))
+  ;; Draw the rachis (stem)
+  (q/line 0 start-y 0 end-y)
+
+  (loop [i 0
+         current-y start-y]
+    (when (and (< i 50)
+               (if (neg? direction)
+                 (> current-y end-y)
+                 (< current-y end-y)))
+
+      (let [dist-traveled (Math/abs (- start-y current-y))
+            progress (/ dist-traveled length)
+            attrs (leaflet-attrs progress leaf-size base-spacing)
+            leaf-radians (q/radians (:angle attrs))
+            rotation (if (even? i) leaf-radians (- leaf-radians))
+            size (:size attrs)]
+
+        (q/with-translation [0 current-y]
+          (q/with-rotation [rotation]
+            (if (and (> size max-pinna-size) (< depth 1))
+              ;; RECURSIVE CASE: Pinnation
+              (let [sub-length size
+                    sub-leaf-size (* size 0.06)
+                    sub-spacing (* size 0.02)]
+                (draw-frond sub-length sub-leaf-size sub-spacing 0 (- sub-length) -1 (inc depth)))
+
+              ;; BASE CASE
+              (draw-leaf 0 0 size))))
+        (recur (inc i) (+ current-y (* direction (:spacing attrs))))))))
 
 (defn draw-fern [state]
-  (q/stroke 0)
-  (q/stroke-weight 1.5)
-
   (let [half-height (/ frond-length 2)
         leaf-size (:leaf-size state)
-        base-spacing (:base-spacing state)
-        num-leaves (:num-leaves state)]
-
-    ;; Draw rachis (fern spine)
-    (q/line 0 (- half-height) 0 half-height)
-    ;; Loop to draw leaflets down the sides
-    (loop [i 0
-           current-y (- half-height 50)]
-      (when (and (< i num-leaves) (> current-y (- half-height)))
-        (let [;; Alternate sides: even i = Right, odd i = Left
-              is-right (even? i)
-              ;; y-progress is 0.0 at bottom, 1.0 at top
-              y-progress (y-progress current-y)
-              attrs (leaflet-attrs y-progress leaf-size base-spacing)]
-          (render-leaflet current-y attrs is-right)
-          (recur (inc i) (- current-y (:spacing attrs))))))))
+        base-spacing (:base-spacing state)]
+    ;; Draw Main Fern
+    (draw-frond frond-length leaf-size base-spacing half-height (- half-height) -1 0)))
 
 (defn preview
   [state]
