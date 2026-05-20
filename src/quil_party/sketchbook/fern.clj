@@ -5,7 +5,11 @@
 (def sketch-width 600)
 (def sketch-height 700)
 
+;; FERN INITIAL STATE
 (def frond-length (- sketch-height 20))
+(def leaf-size 50)
+(def leaf-spacing 8)
+(def num-leaves 65)
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
 (defn debug
@@ -18,9 +22,9 @@
   "Initialize state"
   []
   (q/frame-rate 30)
-  {:leaf-size 25
-   :base-spacing 5
-   :num-leaves 32})
+  {:leaf-size leaf-size
+   :base-spacing leaf-spacing
+   :num-leaves num-leaves})
 
 (defn bezier-point
   "Helper for hatching"
@@ -99,7 +103,13 @@
 
               ;; 2. Leaf angles based on stem position
               ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
-              angle-deg (* 90 (- 1 y-progress))
+              ;; Uses exponent to define a curve to define how quickly the leaflets "falloff" towards horizontal
+              ;; 1.0 = Linear (current behavior)
+              ;; 0.5 = Square Root (stays flat longer)
+              ;; 0.2 = Very flat (almost 90 degrees until the very tip)
+              exponent 0.3
+              bottom-factor (q/pow (- 1 y-progress) exponent)
+              angle-deg (* 90 bottom-factor)
 
               ;; Clamp angle between 0 and 90
               clamped-angle (max 10 (min 90 angle-deg))
