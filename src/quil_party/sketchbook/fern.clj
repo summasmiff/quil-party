@@ -11,7 +11,7 @@
 (def frond-length (- sketch-height 20))
 (def leaf-size 50)
 (def max-pinna-size 20)
-(def leaf-spacing 10)
+(def leaf-spacing 15)
 (def num-leaves 50)
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
@@ -77,8 +77,9 @@
             (q/line x-left y x-right y)))))))
 
 ;; Fern Drawing
-(defn angle-attrs [y-progress]
-  ;; ANGLE CALCULATION
+(defn angle-attrs
+  "Angle calculation"
+  [y-progress]
   ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
   ;; Uses 'exponent' to define a curve to define how quickly the leaflets "falloff" towards horizontal
   ;; 1.0 = Linear (current behavior)
@@ -88,20 +89,27 @@
         bottom-factor (q/pow (- 1 y-progress) exponent)
         angle-deg (* 90 bottom-factor)]
     ;; Apply clamping
-    (max 10 (min 90 angle-deg))))
+    (max 5 (min 90 angle-deg))))
 
-(defn leaflet-attrs [y-progress leaf-size base-spacing]
+(defn scale-attrs [y-progress leaf-size base-spacing]
   (let [;; SCALE CALCULATION
+        ;; We map y-progress from [0.5, 1.0] to [0.0, 1.0] and apply a power curve.
+        ;; Using Math/pow with <1.0 creates a concave curve, >1.0 creates a convex curve
         sine-wave (if (<= y-progress 0.5)
                     1.0
-                    (q/sin (* y-progress q/PI)))
-        scale-curve-factor 2.3
+                    (let [norm-t (- (* 2.0 y-progress) 1.0)] ;; Normalize 0.5->1.0 becomes 0.0->1.0
+                      (- 1.0 (Math/pow norm-t 1))))
+        scale-curve-factor 2
         scale (+ 0.1 (* scale-curve-factor sine-wave))
         actual-leaf-size (* leaf-size scale)
         spacing (* base-spacing (+ 0.75 sine-wave))]
-    {:angle (angle-attrs y-progress)
-     :size actual-leaf-size
+    {:size actual-leaf-size
      :spacing spacing}))
+
+(defn leaflet-attrs [y-progress leaf-size base-spacing]
+  (let [scale-attrs (scale-attrs y-progress leaf-size base-spacing)]
+    (merge scale-attrs
+           {:angle (angle-attrs y-progress)})))
 
 (defn draw-frond [length leaf-size base-spacing start-y end-y direction depth]
   (q/stroke 0)
@@ -170,7 +178,7 @@
         svg (str "svg/" name "-" frame-num ".svg")
         gr (q/create-graphics sketch-width sketch-height :svg svg)]
     (q/with-graphics gr
-      (draw-fern state))
+      (q/with-translation [(/ sketch-width 2) (/ sketch-height 2)] (draw-fern state)))
     (q/save gr)))
 
 (defn key-pressed [state event]
