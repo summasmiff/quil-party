@@ -11,7 +11,7 @@
 (def frond-length (- sketch-height 20))
 (def leaf-size 50)
 (def leaf-spacing 8)
-(def num-leaves 65)
+(def num-leaves 50)
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
 (defn setup
@@ -81,23 +81,29 @@
         dist-from-bottom (- half-height current-y)]
     (/ dist-from-bottom frond-length)))
 
-(defn leaflet-attrs [y-progress leaf-size base-spacing]
-  (let [;; ANGLE CALCULATION
-        ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
-        ;; Uses 'exponent' to define a curve to define how quickly the leaflets "falloff" towards horizontal
-        ;; 1.0 = Linear (current behavior)
-        ;; 0.5 = Square Root (stays flat longer)
-        ;; 0.2 = Very flat (almost 90 degrees until the very tip)
-        exponent 0.3
+(defn angle-attrs [y-progress]
+  ;; ANGLE CALCULATION
+  ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
+  ;; Uses 'exponent' to define a curve to define how quickly the leaflets "falloff" towards horizontal
+  ;; 1.0 = Linear (current behavior)
+  ;; 0.5 = Square Root (stays flat longer)
+  ;; 0.2 = Very flat (almost 90 degrees until the very tip)
+  (let [exponent 0.3
         bottom-factor (q/pow (- 1 y-progress) exponent)
-        angle-deg (* 90 bottom-factor)
-        clamped-angle (max 10 (min 90 angle-deg))
-        ;; SCALE CALCULATION
-        sine-wave (q/sin (* y-progress q/PI))
-        scale (+ 0.1 (* 1.3 sine-wave))
+        angle-deg (* 90 bottom-factor)]
+    ;; Apply clamping
+    (max 10 (min 90 angle-deg))))
+
+(defn leaflet-attrs [y-progress leaf-size base-spacing]
+  (let [;; SCALE CALCULATION
+        sine-wave (if (<= y-progress 0.5)
+                    1.0
+                    (q/sin (* y-progress q/PI)))
+        scale-curve-factor 2.3
+        scale (+ 0.1 (* scale-curve-factor sine-wave))
         actual-leaf-size (* leaf-size scale)
         spacing (* base-spacing (+ 0.75 sine-wave))]
-    {:angle clamped-angle
+    {:angle (angle-attrs y-progress)
      :size actual-leaf-size
      :spacing spacing}))
 
@@ -123,7 +129,7 @@
     (q/line 0 (- half-height) 0 half-height)
     ;; Loop to draw leaflets down the sides
     (loop [i 0
-           current-y half-height]
+           current-y (- half-height 50)]
       (when (and (< i num-leaves) (> current-y (- half-height)))
         (let [;; Alternate sides: even i = Right, odd i = Left
               is-right (even? i)
