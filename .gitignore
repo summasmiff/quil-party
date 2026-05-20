@@ -15,3 +15,5 @@ todo.md
 .lsp/.cache/db.transit.json
 .DS_Store
 .calva/repl.calva-repl
+
+todo.md
