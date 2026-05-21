@@ -111,47 +111,91 @@
     (merge scale-attrs
            {:angle (angle-attrs y-progress)})))
 
-(defn draw-frond [length leaf-size base-spacing start-y end-y direction depth]
+(defn in-bounds? [current-y end-y direction]
+  (if (neg? direction)
+    (> current-y end-y)
+    (< current-y end-y)))
+
+(defn should-continue-loop? [i current-y end-y direction]
+  (and (< i 50)
+       (in-bounds? current-y end-y direction)))
+
+(defn compute-segment-geometry [i start-y current-y length bend leaf-size base-spacing]
+  (let [dist-traveled (Math/abs (- start-y current-y))
+        progress (/ dist-traveled length)
+        curve-x (* bend 4 progress (- 1 progress))
+        attrs (leaflet-attrs progress leaf-size base-spacing)
+        leaf-radians (q/radians (:angle attrs))
+        rotation (if (even? i) leaf-radians (- leaf-radians))]
+    {:curve-x curve-x
+     :size (:size attrs)
+     :rotation rotation
+     :spacing (:spacing attrs)}))
+
+(defn should-recurse? [size depth]
+  (and (> size max-pinna-size)
+       (< depth 1)))
+
+(defn get-sub-frond-args [size rotation depth curve-dir]
+  ;; Calculate arguments for the next draw-frond call
+  (let [next-curve-dir (if (pos? rotation) 1 -1)]
+    [size
+     (* size 0.06)
+     (* size 0.02)
+     0
+     (- size)
+     -1
+     (inc depth)
+     next-curve-dir]))
+
+(declare draw-frond)
+
+(defn draw-attachment [x y rotation size depth curve-dir]
+  (q/with-translation [x y]
+    (q/with-rotation [rotation]
+      (if (should-recurse? size depth)
+        (apply draw-frond (get-sub-frond-args size rotation depth curve-dir))
+        (draw-leaf 0 0 size)))))
+
+(defn draw-frond [length leaf-size base-spacing start-y end-y direction depth curve-dir]
+  ;; 1. Setup Drawing Style
   (q/stroke 0)
   (q/stroke-weight (if (zero? depth) 1.5 0.8))
 
-  ;; Draw the rachis (stem)
-  (q/line 0 start-y 0 end-y)
+  (let [bendiness 0.07
+        bend (* length bendiness curve-dir)
+        offset (* length 0.05)]
 
-  (let [offset (* length 0.05)]
+    ;; 2. Loop
     (loop [i 0
-           current-y (+ start-y (* direction offset))]
-      (when (and (< i 50)
-                 (if (neg? direction)
-                   (> current-y end-y)
-                   (< current-y end-y)))
+           current-y (+ start-y (* direction offset))
+           prev-x 0.0
+           prev-y (float start-y)]
 
-        (let [dist-traveled (Math/abs (- start-y current-y))
-              progress (/ dist-traveled length)
-              attrs (leaflet-attrs progress leaf-size base-spacing)
-              leaf-radians (q/radians (:angle attrs))
-              rotation (if (even? i) leaf-radians (- leaf-radians))
-              size (:size attrs)]
+      (when (should-continue-loop? i current-y end-y direction)
 
-          (q/with-translation [0 current-y]
-            (q/with-rotation [rotation]
-              (if (and (> size max-pinna-size) (< depth 1))
-                ;; RECURSIVE CASE: Pinnation
-                (let [sub-length size
-                      sub-leaf-size (* size 0.06)
-                      sub-spacing (* size 0.02)]
-                  (draw-frond sub-length sub-leaf-size sub-spacing 0 (- sub-length) -1 (inc depth)))
+        ;; 3. Calculate Geometry for this segment
+        (let [{:keys [curve-x size rotation spacing]}
+              (compute-segment-geometry i start-y current-y length bend leaf-size base-spacing)]
 
-                ;; BASE CASE
-                (draw-leaf 0 0 size))))
-          (recur (inc i) (+ current-y (* direction (:spacing attrs)))))))))
+          ;; 4. Draw Stem Segment
+          (q/line prev-x prev-y curve-x current-y)
+
+          ;; 5. Draw Branch/Leaf
+          (draw-attachment curve-x current-y rotation size depth curve-dir)
+
+          ;; 6. Recur
+          (recur (inc i)
+                 (+ current-y (* direction spacing))
+                 curve-x
+                 current-y))))))
 
 (defn draw-fern [state]
   (let [half-height (/ frond-length 2)
         leaf-size (:leaf-size state)
         base-spacing (:base-spacing state)]
     ;; Draw Main Fern
-    (draw-frond frond-length leaf-size base-spacing half-height (- half-height) -1 0)))
+    (draw-frond frond-length leaf-size base-spacing half-height (- half-height) -1 0 1)))
 
 (defn preview
   [state]
