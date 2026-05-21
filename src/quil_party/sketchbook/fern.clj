@@ -136,7 +136,7 @@
   (and (> size max-pinna-size)
        (< depth 1)))
 
-(defn get-sub-frond-args [size rotation depth curve-dir]
+(defn get-sub-frond-args [size rotation depth]
   ;; Calculate arguments for the next draw-frond call
   (let [next-curve-dir (if (pos? rotation) 1 -1)]
     [size
@@ -150,11 +150,11 @@
 
 (declare draw-frond)
 
-(defn draw-attachment [x y rotation size depth curve-dir]
+(defn draw-attachment [x y rotation size depth]
   (q/with-translation [x y]
     (q/with-rotation [rotation]
       (if (should-recurse? size depth)
-        (apply draw-frond (get-sub-frond-args size rotation depth curve-dir))
+        (apply draw-frond (get-sub-frond-args size rotation depth))
         (draw-leaf 0 0 size)))))
 
 (defn draw-frond [length leaf-size base-spacing start-y end-y direction depth curve-dir]
@@ -182,7 +182,7 @@
           (q/line prev-x prev-y curve-x current-y)
 
           ;; 5. Draw Branch/Leaf
-          (draw-attachment curve-x current-y rotation size depth curve-dir)
+          (draw-attachment curve-x current-y rotation size depth)
 
           ;; 6. Recur
           (recur (inc i)
@@ -210,7 +210,11 @@
   (q/text-size 14)
 
   (q/text "Press UP arrow to save SVG" 20 (+ sketch-height 20))
+  (when-let [filename (:last-saved state)]
+    (q/fill 0 150 0) ;; Make the text green to indicate success
+    (q/text (str "Saved SVG as: " filename) 20 (+ sketch-height 40)))
 
+  (q/fill 0)
   (q/text (str "Leaf Size: " (:leaf-size state) " [ / ]") 300 (+ sketch-height 20))
   (q/text (str "Spacing: "   (:base-spacing state) " - / =") 300 (+ sketch-height 40))
   (q/text (str "Count: "     (:num-leaves state) " , / .") 500 (+ sketch-height 20)))
@@ -219,17 +223,18 @@
   [state]
   (let [name "fern"
         frame-num (q/frame-count)
-        svg (str "svg/" name "-" frame-num ".svg")
-        gr (q/create-graphics sketch-width sketch-height :svg svg)]
+        filename (str "svg/" name "-" frame-num ".svg")
+        ;; The :svg argument handles the file creation automatically
+        gr (q/create-graphics sketch-width sketch-height :svg filename)]
     (q/with-graphics gr
       (q/with-translation [(/ sketch-width 2) (/ sketch-height 2)] (draw-fern state)))
-    (q/save gr)))
+    (assoc state :last-saved filename)))
 
 (defn key-pressed [state event]
   (let [k (:key event)]
     (cond
       ;; Export
-      (= k :up) (do (export state) state)
+      (= k :up) (export state)
 
       ;; Adjust Leaf Size
       (= k (keyword "]")) (update state :leaf-size + 5)
