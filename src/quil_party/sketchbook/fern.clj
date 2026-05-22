@@ -6,22 +6,26 @@
 ;; boring constants
 (def sketch-width 600)
 (def sketch-height 700)
-
-;; FERN INITIAL STATE
-(def frond-length (- sketch-height 20))
-(def leaf-size 50)
-(def max-pinna-size 20)
-(def leaf-spacing 15)
-(def num-leaves 50)
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
+
+;; fern constants
+(def frond-length (- sketch-height 20))
+(def max-pinna-size 14)
+(def hatched? false)
+
+;; FERN INITIAL STATE / EDITABLE PARAMS
+(def leaf-size 50)
+(def init-leaves 10)
+(def leaf-spacing 15)
 
 (defn setup
   "Initialize state"
   []
   (q/frame-rate 30)
+  ;; Expose params for live editing
   {:leaf-size leaf-size
    :base-spacing leaf-spacing
-   :num-leaves num-leaves})
+   :num-leaves init-leaves})
 
 ;; Leaflet Drawing
 (defn bezier-point
@@ -53,7 +57,7 @@
         hatch-spacing 3]
     (q/no-fill)
     (q/with-translation [starting-x starting-y]
-      ;; 1. Draw Outline
+      ;; 1. Draw leaf outlines
       (q/begin-shape)
       (q/vertex 0 0)
       (q/bezier-vertex (- leaf-width) (- (/ leaf-size 2))
@@ -65,40 +69,43 @@
       (q/end-shape :close)
 
       ;; 2. Draw Hatching
-      (doseq [y (range (- leaf-size) 0 hatch-spacing)]
-        (let [x-left (find-x-at-y y
-                                  0 (- (/ leaf-size 2)) (- leaf-size) (- leaf-size)
-                                  0 (- leaf-width) 0 0)
-              x-right (- x-left)
-              width (- x-right x-left)]
+      (when hatched?
+        (doseq [y (range (- leaf-size) 0 hatch-spacing)]
+          (let [x-left (find-x-at-y y
+                                    0 (- (/ leaf-size 2)) (- leaf-size) (- leaf-size)
+                                    0 (- leaf-width) 0 0)
+                x-right (- x-left)
+                width (- x-right x-left)]
 
-          ;; Only draw if the line is wider than the spacing
-          (when (> width hatch-spacing)
-            (q/line x-left y x-right y)))))))
+            ;; Only draw if the line is wider than the spacing
+            (when (> width hatch-spacing)
+              (q/line x-left y x-right y))))))))
 
 ;; Fern Drawing
 (defn angle-attrs
-  "Angle calculation"
+  "Angle calculation: Find attachment angle of leaflet or subfrond to stem.
+  90 degrees -> horizontal, 0 degrees  -> vertical.\n
+  'exponent' defines a curve to define how quickly the leaflets falloff towards horizontal:\n
+  1.0 = Linear\n
+  0.5 = Square Root (stays flat longer)\n
+  0.2 = Very flat (almost 90 degrees until the very tip)"
   [y-progress]
-  ;; 90 degrees at bottom (progress 0) -> horizontal, 0 degrees at top (progress 1) -> vertical
-  ;; Uses 'exponent' to define a curve to define how quickly the leaflets "falloff" towards horizontal
-  ;; 1.0 = Linear (current behavior)
-  ;; 0.5 = Square Root (stays flat longer)
-  ;; 0.2 = Very flat (almost 90 degrees until the very tip)
   (let [exponent 0.3
         bottom-factor (q/pow (- 1 y-progress) exponent)
         angle-deg (* 90 bottom-factor)]
     ;; Apply clamping
     (max 5 (min 90 angle-deg))))
 
-(defn scale-attrs [y-progress leaf-size base-spacing]
-  (let [;; SCALE CALCULATION
-        ;; We map y-progress from [0.5, 1.0] to [0.0, 1.0] and apply a power curve.
-        ;; Using Math/pow with <1.0 creates a concave curve, >1.0 creates a convex curve
+(defn scale-attrs
+  "Scale calculation: How big should the leaflet or subfrond be.
+   Tapers the top end of frond or sub-frond on a curve.
+   `curve-factor` <1.0 creates a concave curve, >1.0 creates a convex curve."
+  [y-progress leaf-size base-spacing]
+  (let [curve-factor 1.6
         sine-wave (if (<= y-progress 0.5)
                     1.0
                     (let [norm-t (- (* 2.0 y-progress) 1.0)] ;; Normalize 0.5->1.0 becomes 0.0->1.0
-                      (- 1.0 (Math/pow norm-t 1))))
+                      (- 1.0 (Math/pow norm-t curve-factor))))
         scale-curve-factor 2
         scale (+ 0.1 (* scale-curve-factor sine-wave))
         actual-leaf-size (* leaf-size scale)
@@ -116,8 +123,8 @@
     (> current-y end-y)
     (< current-y end-y)))
 
-(defn should-continue-loop? [i current-y end-y direction]
-  (and (< i 50)
+(defn should-continue-loop? [i current-y end-y direction num-leaves]
+  (and (< i num-leaves)
        (in-bounds? current-y end-y direction)))
 
 (defn compute-segment-geometry [i start-y current-y length bend leaf-size base-spacing]
@@ -136,12 +143,13 @@
   (and (> size max-pinna-size)
        (< depth 1)))
 
-(defn get-sub-frond-args [size rotation depth]
+(defn get-sub-frond-args [size rotation depth num-leaves]
   ;; Calculate arguments for the next draw-frond call
   (let [next-curve-dir (if (pos? rotation) 1 -1)]
     [size
      (* size 0.06)
      (* size 0.02)
+     num-leaves
      0
      (- size)
      -1
@@ -150,41 +158,31 @@
 
 (declare draw-frond)
 
-(defn draw-attachment [x y rotation size depth]
+(defn draw-attachment [x y rotation size depth num-leaves]
   (q/with-translation [x y]
     (q/with-rotation [rotation]
       (if (should-recurse? size depth)
-        (apply draw-frond (get-sub-frond-args size rotation depth))
+        (apply draw-frond (get-sub-frond-args size rotation depth num-leaves))
         (draw-leaf 0 0 size)))))
 
-(defn draw-frond [length leaf-size base-spacing start-y end-y direction depth curve-dir]
-  ;; 1. Setup Drawing Style
+(defn draw-frond [length leaf-size base-spacing num-leaves start-y end-y direction depth curve-dir]
   (q/stroke 0)
   (q/stroke-weight (if (zero? depth) 1.5 0.8))
-
-  (let [bendiness 0.07
+  (let [bendiness 0.07 ;; stem bendiness
         bend (* length bendiness curve-dir)
         offset (* length 0.05)]
-
-    ;; 2. Loop
     (loop [i 0
            current-y (+ start-y (* direction offset))
            prev-x 0.0
            prev-y (float start-y)]
-
-      (when (should-continue-loop? i current-y end-y direction)
-
-        ;; 3. Calculate Geometry for this segment
+      (when (should-continue-loop? i current-y end-y direction num-leaves)
         (let [{:keys [curve-x size rotation spacing]}
               (compute-segment-geometry i start-y current-y length bend leaf-size base-spacing)]
-
-          ;; 4. Draw Stem Segment
+          ;; Draw Stem Segment
           (q/line prev-x prev-y curve-x current-y)
-
-          ;; 5. Draw Branch/Leaf
-          (draw-attachment curve-x current-y rotation size depth)
-
-          ;; 6. Recur
+          ;; Draw Leaf or Subfrond
+          (draw-attachment curve-x current-y rotation size depth num-leaves)
+          ;; Next
           (recur (inc i)
                  (+ current-y (* direction spacing))
                  curve-x
@@ -193,9 +191,10 @@
 (defn draw-fern [state]
   (let [half-height (/ frond-length 2)
         leaf-size (:leaf-size state)
-        base-spacing (:base-spacing state)]
+        base-spacing (:base-spacing state)
+        num-leaves (:num-leaves state)]
     ;; Draw Main Fern
-    (draw-frond frond-length leaf-size base-spacing half-height (- half-height) -1 0 1)))
+    (draw-frond frond-length leaf-size base-spacing num-leaves half-height (- half-height) -1 0 1)))
 
 (defn preview
   [state]
