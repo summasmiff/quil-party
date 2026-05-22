@@ -15,7 +15,7 @@
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
 (def leaf-size 50)
-(def init-leaves 10)
+(def init-leaves 50)
 (def leaf-spacing 15)
 
 (defn setup
@@ -123,10 +123,6 @@
     (> current-y end-y)
     (< current-y end-y)))
 
-(defn should-continue-loop? [i current-y end-y direction num-leaves]
-  (and (< i num-leaves)
-       (in-bounds? current-y end-y direction)))
-
 (defn compute-segment-geometry [i start-y current-y length bend leaf-size base-spacing]
   (let [dist-traveled (Math/abs (- start-y current-y))
         progress (/ dist-traveled length)
@@ -175,7 +171,8 @@
            current-y (+ start-y (* direction offset))
            prev-x 0.0
            prev-y (float start-y)]
-      (when (should-continue-loop? i current-y end-y direction num-leaves)
+      (when (and (< i num-leaves)
+                 (in-bounds? current-y end-y direction))
         (let [{:keys [curve-x size rotation spacing]}
               (compute-segment-geometry i start-y current-y length bend leaf-size base-spacing)]
           ;; Draw Stem Segment
