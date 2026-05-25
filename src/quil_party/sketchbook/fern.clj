@@ -139,59 +139,64 @@
   (and (> size max-pinna-size)
        (< depth 1)))
 
-(defn get-sub-frond-args [size rotation depth num-leaves]
-  ;; Calculate arguments for the next draw-frond call
-  (let [next-curve-dir (if (pos? rotation) 1 -1)]
-    [size
-     (* size 0.06)
-     (* size 0.02)
-     num-leaves
-     0
-     (- size)
-     -1
-     (inc depth)
-     next-curve-dir]))
-
 (declare draw-frond)
 
-(defn draw-attachment [x y rotation size depth num-leaves]
+(defn draw-attachment [x y rotation size depth]
   (q/with-translation [x y]
     (q/with-rotation [rotation]
       (if (should-recurse? size depth)
-        (apply draw-frond (get-sub-frond-args size rotation depth num-leaves))
+        (let [next-curve-dir (if (pos? rotation) 1 -1)]
+          (draw-frond size ;; length
+                      (* size 0.07) ;; leaf-size
+                      (* size 0.03) ;; base-spacing
+                      0
+                      (- size)
+                      -1
+                      (inc depth)
+                      next-curve-dir))
         (draw-leaf 0 0 size)))))
 
-(defn draw-frond [length leaf-size base-spacing num-leaves start-y end-y direction depth curve-dir]
+(defn draw-frond [length leaf-size base-spacing start-y end-y direction depth curve-dir]
   (q/stroke 0)
   (q/stroke-weight (if (zero? depth) 1.5 0.8))
-  (let [bendiness 0.07 ;; stem bendiness
+  (let [;; Stem bendiness
+        bendiness 0.07
         bend (* length bendiness curve-dir)
-        offset (* length 0.05)]
+        offset (* length 0.05)
+        ;; Dynamic leaf sizing + spacing
+        max-leaves-by-spacing (int (/ length base-spacing))
+        min-pixels-per-leaf 2.0 ;; Minimum leaf size
+        max-leaves-by-size (int (/ length min-pixels-per-leaf))
+        effective-num-leaves (max 2 (min max-leaves-by-spacing max-leaves-by-size))
+        dynamic-spacing (/ length (max 1 (dec effective-num-leaves)))]
+
     (loop [i 0
            current-y (+ start-y (* direction offset))
            prev-x 0.0
            prev-y (float start-y)]
-      (when (and (< i num-leaves)
+      (when (and (< i effective-num-leaves)
                  (in-bounds? current-y end-y direction))
-        (let [{:keys [curve-x size rotation spacing]}
-              (compute-segment-geometry i start-y current-y length bend leaf-size base-spacing)]
+        (let [{:keys [curve-x size rotation]}
+              (compute-segment-geometry i start-y current-y length bend leaf-size dynamic-spacing)]
+
           ;; Draw Stem Segment
           (q/line prev-x prev-y curve-x current-y)
+
           ;; Draw Leaf or Subfrond
-          (draw-attachment curve-x current-y rotation size depth num-leaves)
+          (draw-attachment curve-x current-y rotation size depth)
+
           ;; Next
           (recur (inc i)
-                 (+ current-y (* direction spacing))
+                 (+ current-y (* direction dynamic-spacing))
                  curve-x
                  current-y))))))
 
 (defn draw-fern [state]
   (let [half-height (/ frond-length 2)
         leaf-size (:leaf-size state)
-        base-spacing (:base-spacing state)
-        num-leaves (:num-leaves state)]
+        base-spacing (:base-spacing state)]
     ;; Draw Main Fern
-    (draw-frond frond-length leaf-size base-spacing num-leaves half-height (- half-height) -1 0 1)))
+    (draw-frond frond-length leaf-size base-spacing half-height (- half-height) -1 0 1)))
 
 (defn preview
   [state]
