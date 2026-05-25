@@ -10,7 +10,7 @@
 
 ;; fern constants
 (def frond-length (- sketch-height 20))
-(def max-pinna-size 14)
+(def max-pinna-size 10)
 (def hatched? false)
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
@@ -82,6 +82,17 @@
               (q/line x-left y x-right y))))))))
 
 ;; Fern Drawing
+(def curve-formulas
+  {:parabola   (fn [p] (* 4 p (- 1 p)))                  ; Classic Arch (C-curve)
+   :sine-arch  (fn [p] (Math/sin (* Math/PI p)))        ; Smoother, rounder Arch
+   :s-curve    (fn [p] (Math/sin (* 2 Math/PI p)))      ; Standard S-curve
+   :tall-s     (fn [p]
+                 (let [taper 0.8 ;; Adjust this: higher = bigger difference
+                       scale-factor (+ 0.5 (* taper p))]
+                   (* (Math/sin (* 2 Math/PI p)) scale-factor)))
+   :double-s   (fn [p] (Math/sin (* 4 Math/PI p)))      ; Wavy (two S-shapes)
+   })
+
 (defn angle-attrs
   "Angle calculation: Find attachment angle of leaflet or subfrond to stem.
   90 degrees -> horizontal, 0 degrees  -> vertical.\n
@@ -123,10 +134,11 @@
     (> current-y end-y)
     (< current-y end-y)))
 
-(defn compute-segment-geometry [i start-y current-y length bend leaf-size base-spacing]
+(defn compute-segment-geometry [i start-y current-y length bend leaf-size base-spacing depth]
   (let [dist-traveled (Math/abs (- start-y current-y))
         progress (/ dist-traveled length)
-        curve-x (* bend 4 progress (- 1 progress))
+        curve-fn (if (= depth 0) (get curve-formulas :tall-s) (get curve-formulas :parabola))
+        curve-x (* bend (curve-fn progress))
         attrs (leaflet-attrs progress leaf-size base-spacing)
         leaf-radians (q/radians (:angle attrs))
         rotation (if (even? i) leaf-radians (- leaf-radians))]
@@ -147,8 +159,8 @@
       (if (should-recurse? size depth)
         (let [next-curve-dir (if (pos? rotation) 1 -1)]
           (draw-frond size ;; length
-                      (* size 0.07) ;; leaf-size
-                      (* size 0.03) ;; base-spacing
+                      (* size 0.06) ;; leaf-size
+                      (* size 0.025) ;; base-spacing
                       0
                       (- size)
                       -1
@@ -160,7 +172,7 @@
   (q/stroke 0)
   (q/stroke-weight (if (zero? depth) 1.5 0.8))
   (let [;; Stem bendiness
-        bendiness 0.07
+        bendiness 0.05
         bend (* length bendiness curve-dir)
         offset (* length 0.05)
         ;; Dynamic leaf sizing + spacing
@@ -177,7 +189,7 @@
       (when (and (< i effective-num-leaves)
                  (in-bounds? current-y end-y direction))
         (let [{:keys [curve-x size rotation]}
-              (compute-segment-geometry i start-y current-y length bend leaf-size dynamic-spacing)]
+              (compute-segment-geometry i start-y current-y length bend leaf-size dynamic-spacing depth)]
 
           ;; Draw Stem Segment
           (q/line prev-x prev-y curve-x current-y)
