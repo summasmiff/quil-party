@@ -8,14 +8,15 @@
 (def sketch-height 700)
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
-;; fern constants
+;; fern parameters
 (def frond-length (- sketch-height 20))
 (def max-pinna-size 10)
-(def hatched? false)
+(def pinna-leaf-ratio 0.085)
+(def pinna-spacing 0.025)
+(def scale-curve 0.85) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
 (def leaf-size 50)
-(def init-leaves 50)
 (def leaf-spacing 15)
 
 (defn setup
@@ -24,37 +25,11 @@
   (q/frame-rate 30)
   ;; Expose params for live editing
   {:leaf-size leaf-size
-   :base-spacing leaf-spacing
-   :num-leaves init-leaves})
+   :base-spacing leaf-spacing})
 
 ;; Leaflet Drawing
-(defn bezier-point
-  "Helper for hatching"
-  [t p0 p1 p2 p3]
-  (let [u (- 1 t)
-        tt (* t t)
-        uu (* u u)]
-    (+ (* uu u p0)
-       (* 3 uu t p1)
-       (* 3 u tt p2)
-       (* tt t p3))))
-
-(defn find-x-at-y
-  "Helper for hatching"
-  [target-y y0 y1 y2 y3 x0 x1 x2 x3]
-  (loop [low 0.0
-         high 1.0]
-    (let [mid (/ (+ low high) 2.0)
-          curr-y (bezier-point mid y0 y1 y2 y3)]
-      (if (< (Math/abs (- curr-y target-y)) 0.1)
-        (bezier-point mid x0 x1 x2 x3)
-        (if (> curr-y target-y)
-          (recur mid high)
-          (recur low mid))))))
-
 (defn draw-leaf [starting-x starting-y leaf-size]
-  (let [leaf-width (/ leaf-size 4)
-        hatch-spacing 3]
+  (let [leaf-width (/ leaf-size 2)]
     (q/no-fill)
     (q/with-translation [starting-x starting-y]
       ;; 1. Draw leaf outlines
@@ -66,32 +41,23 @@
       (q/bezier-vertex leaf-width  (- (/ leaf-size 2))
                        0           0
                        0           0)
-      (q/end-shape :close)
-
-      ;; 2. Draw Hatching
-      (when hatched?
-        (doseq [y (range (- leaf-size) 0 hatch-spacing)]
-          (let [x-left (find-x-at-y y
-                                    0 (- (/ leaf-size 2)) (- leaf-size) (- leaf-size)
-                                    0 (- leaf-width) 0 0)
-                x-right (- x-left)
-                width (- x-right x-left)]
-
-            ;; Only draw if the line is wider than the spacing
-            (when (> width hatch-spacing)
-              (q/line x-left y x-right y))))))))
+      (q/end-shape :close))))
 
 ;; Fern Drawing
 (def curve-formulas
-  {:parabola   (fn [p] (* 4 p (- 1 p)))                  ; Classic Arch (C-curve)
+  {:parabola   (fn [p] (* 4 p (- 1 p)))                 ; Classic Arch (C-curve)
    :sine-arch  (fn [p] (Math/sin (* Math/PI p)))        ; Smoother, rounder Arch
    :s-curve    (fn [p] (Math/sin (* 2 Math/PI p)))      ; Standard S-curve
    :tall-s     (fn [p]
                  (let [taper 0.8 ;; Adjust this: higher = bigger difference
                        scale-factor (+ 0.5 (* taper p))]
                    (* (Math/sin (* 2 Math/PI p)) scale-factor)))
-   :double-s   (fn [p] (Math/sin (* 4 Math/PI p)))      ; Wavy (two S-shapes)
-   })
+   :double-s   (fn [p] (Math/sin (* 4 Math/PI p)))      ; two S-shapes
+   :asymmetric-s-smooth                                 ; S-curve where top and bottom curve are adjustable
+   (fn [p]
+     (let [breakpoint 0.7 ;; 70% the length of the stem
+           k (/ (Math/log 0.5) (Math/log breakpoint))]
+       (Math/sin (* 2 Math/PI (Math/pow p k)))))})
 
 (defn angle-attrs
   "Angle calculation: Find attachment angle of leaflet or subfrond to stem.
@@ -112,7 +78,7 @@
    Tapers the top end of frond or sub-frond on a curve.
    `curve-factor` <1.0 creates a concave curve, >1.0 creates a convex curve."
   [y-progress leaf-size base-spacing]
-  (let [curve-factor 1.6
+  (let [curve-factor scale-curve
         sine-wave (if (<= y-progress 0.5)
                     1.0
                     (let [norm-t (- (* 2.0 y-progress) 1.0)] ;; Normalize 0.5->1.0 becomes 0.0->1.0
@@ -120,7 +86,7 @@
         scale-curve-factor 2
         scale (+ 0.1 (* scale-curve-factor sine-wave))
         actual-leaf-size (* leaf-size scale)
-        spacing (* base-spacing (+ 0.75 sine-wave))]
+        spacing (* base-spacing (+ 0.5 sine-wave))]
     {:size actual-leaf-size
      :spacing spacing}))
 
@@ -137,9 +103,9 @@
 (defn compute-segment-geometry [i start-y current-y length bend leaf-size base-spacing depth]
   (let [dist-traveled (Math/abs (- start-y current-y))
         progress (/ dist-traveled length)
-        curve-fn (if (= depth 0) (get curve-formulas :tall-s) (get curve-formulas :parabola))
+        curve-fn (if (= depth 0) (get curve-formulas :asymmetric-s-smooth) (get curve-formulas :sine-arch))
         curve-x (* bend (curve-fn progress))
-        attrs (leaflet-attrs progress leaf-size base-spacing)
+        attrs (leaflet-attrs progress leaf-size (* 2 base-spacing))
         leaf-radians (q/radians (:angle attrs))
         rotation (if (even? i) leaf-radians (- leaf-radians))]
     {:curve-x curve-x
@@ -159,8 +125,8 @@
       (if (should-recurse? size depth)
         (let [next-curve-dir (if (pos? rotation) 1 -1)]
           (draw-frond size ;; length
-                      (* size 0.06) ;; leaf-size
-                      (* size 0.025) ;; base-spacing
+                      (* size pinna-leaf-ratio) ;; leaf-size
+                      (* size pinna-spacing) ;; base-spacing
                       0
                       (- size)
                       -1
@@ -174,7 +140,7 @@
   (let [;; Stem bendiness
         bendiness 0.05
         bend (* length bendiness curve-dir)
-        offset (* length 0.05)
+        offset (* length 0.09)
         ;; Dynamic leaf sizing + spacing
         max-leaves-by-spacing (int (/ length base-spacing))
         min-pixels-per-leaf 2.0 ;; Minimum leaf size
@@ -224,7 +190,7 @@
 
   (q/text "Press UP arrow to save SVG" 20 (+ sketch-height 20))
   (when-let [filename (:last-saved state)]
-    (q/fill 0 150 0) ;; Make the text green to indicate success
+    (q/fill 0 150 0) ;; Make the text green
     (q/text (str "Saved SVG as: " filename) 20 (+ sketch-height 40)))
 
   (q/fill 0)
