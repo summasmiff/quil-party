@@ -13,7 +13,7 @@
 (def max-pinna-size 7)
 (def pinna-leaf-ratio 0.125)
 (def pinna-spacing 0.05)
-(def frond-spacing 0.3)
+(def frond-spacing 0.5)
 (def leaflet-spacing 0.5)
 (def scale-curve 0.8) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
 
@@ -222,11 +222,46 @@
                  current-y))))))
 
 (defn draw-fern [state]
-  (let [half-height (/ frond-length 2)
+  (let [;; 40px up from bottom of screen
+        ;; In translated coords (origin at sketch center), bottom = sketch-height/2
+        emergence-y (- (/ sketch-height 2) 40)
+
         leaf-size (:leaf-size state)
-        base-spacing (:base-spacing state)]
-    ;; Draw Main Fern
-    (draw-frond frond-length leaf-size base-spacing half-height (- half-height) -1 0 1 (get-spacing-ratio 0) state)))
+        base-spacing (:base-spacing state)
+
+        ;; Define 4 fronds as named maps
+        fronds [{:name         :leftmost
+                 :length-ratio 0.56
+                 :rotation-deg -20
+                 :x-offset     -60
+                 :curve        :asymmetric-s-smooth}
+
+                {:name         :left-center
+                 :length-ratio 0.85
+                 :rotation-deg -3
+                 :x-offset     -22
+                 :curve        :asymmetric-s-smooth}
+
+                {:name         :right-center
+                 :length-ratio 1.0
+                 :rotation-deg 9
+                 :x-offset     45
+                 :curve        :smooth-s-flipped}
+
+                {:name         :rightmost
+                 :length-ratio 0.48
+                 :rotation-deg 25
+                 :x-offset     60
+                 :curve        :smooth-s-flipped}]]
+
+    (doseq [{:keys [length-ratio rotation-deg x-offset curve]} fronds]
+      (let [frond-len (* frond-length length-ratio)
+            ;; Inject the specific curve into state for this frond
+            local-state (assoc state :stem-curve curve)]
+
+        (q/with-translation [x-offset emergence-y]
+          (q/with-rotation [(q/radians rotation-deg)]
+            (draw-frond frond-len leaf-size base-spacing 0 (- frond-len) -1 0 1 (get-spacing-ratio 0) local-state)))))))
 
 (defn preview
   [state]
