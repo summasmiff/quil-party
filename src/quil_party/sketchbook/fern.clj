@@ -9,17 +9,18 @@
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
 ;; fern parameters
-(def frond-length (- sketch-height 20))
-(def max-pinna-size 10)
-(def pinna-leaf-ratio 0.1)
-(def pinna-spacing 0.08)
-(def scale-curve 0.85) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
+(def frond-length (- sketch-height 200))
+(def max-pinna-size 7)
+(def pinna-leaf-ratio 0.09)
+(def pinna-spacing 0.04)
+(def spacing-ratio 0.45) ;; 0.25 - 0.4
+(def scale-curve 1.5) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
 (def curve-options [:parabola :sine-arch :s-curve :tall-s :double-s :asymmetric-s-smooth :smooth-s-flipped])
-(def main-stem-curve :double-s)
+(def main-stem-curve :smooth-s-flipped)
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
 (def leaf-size 25)
-(def leaf-spacing 18)
+(def leaf-spacing 11)
 
 (defn setup
   "Initialize state"
@@ -32,9 +33,10 @@
 
 ;; Leaflet Drawing
 (defn draw-leaf [starting-x starting-y leaf-size]
-  (let [leaf-width (* leaf-size 0.8)  ;; 0.8 for a wider shape
+  (let [leaf-width (* leaf-size 0.9)  ;; 0.8 for a wider shape
         top-y      (- leaf-size)
-        belly-y    (- (* leaf-size 0.35))] ;; Widest point down to 35% of the height
+        belly-y    (- (* leaf-size 0.35)) ;; Widest point down to 35% of the height
+        adjusted-y (- top-y 5)]
     (q/no-fill)
     (q/with-translation [starting-x starting-y]
       (q/begin-shape)
@@ -44,11 +46,11 @@
 
       ;; 2. Left side curve going up
       (q/bezier-vertex (- leaf-width)       belly-y
-                       (- (/ leaf-width 2)) (- top-y 10)
+                       (- (/ leaf-width 2)) adjusted-y
                        0                    top-y)
 
       ;; 3. Right side curve going down
-      (q/bezier-vertex (/ leaf-width 2)     (- top-y 10)
+      (q/bezier-vertex (/ leaf-width 2)     adjusted-y
                        leaf-width           belly-y
                        0                    0)
 
@@ -71,7 +73,7 @@
        (Math/sin (* 2 Math/PI (Math/pow p k)))))
    :smooth-s-flipped
    (fn [p]
-     (let [breakpoint 0.3
+     (let [breakpoint 0.5
            k (/ (Math/log 0.5) (Math/log breakpoint))
            mirrored-p (- 1.0 p)]
        (Math/sin (* 2.0 Math/PI (Math/pow mirrored-p k)))))})
@@ -158,12 +160,15 @@
         bendiness 0.05
         bend (* length bendiness curve-dir)
         offset (* length 0.09)
-        ;; Dynamic leaf sizing + spacing
+
+        ;; this calculation acts as a hard upper-limit for the loop counter 'i' to prevent infinite loops
         max-leaves-by-spacing (int (/ length base-spacing))
-        min-pixels-per-leaf 2.0 ;; Minimum leaf size
+        min-pixels-per-leaf 3.0
         max-leaves-by-size (int (/ length min-pixels-per-leaf))
         effective-num-leaves (max 2 (min max-leaves-by-spacing max-leaves-by-size))
-        dynamic-spacing (/ length (max 1 (dec effective-num-leaves)))]
+
+        spacing-to-size-ratio spacing-ratio ;; How much space to give relative to leaf size (e.g. 1.5x)
+        min-local-spacing 2]    ;; Absolute minimum spacing to prevent the loop from stalling
 
     (loop [i 0
            current-y (+ start-y (* direction offset))
@@ -172,7 +177,10 @@
       (when (and (< i effective-num-leaves)
                  (in-bounds? current-y end-y direction))
         (let [{:keys [curve-x size rotation]}
-              (compute-segment-geometry i start-y current-y length bend leaf-size dynamic-spacing depth)]
+              (compute-segment-geometry i start-y current-y length bend leaf-size base-spacing depth)
+
+              ;; Calculate spacing based on the CURRENT leaf size
+              local-spacing (max min-local-spacing (* size spacing-to-size-ratio))]
 
           ;; Draw Stem Segment
           (q/line prev-x prev-y curve-x current-y)
@@ -180,9 +188,9 @@
           ;; Draw Leaf or Subfrond
           (draw-attachment curve-x current-y rotation size depth)
 
-          ;; Next
+          ;; Next: Step by the local-spacing instead of a global dynamic-spacing
           (recur (inc i)
-                 (+ current-y (* direction dynamic-spacing))
+                 (+ current-y (* direction local-spacing))
                  curve-x
                  current-y))))))
 
@@ -205,7 +213,7 @@
   (q/fill 0)
   (q/text-size 14)
 
-  (q/text "Press UP arrow to save SVG" 20 (+ sketch-height 20))
+  (q/text "Press UP to save SVG" 20 (+ sketch-height 20))
   (when-let [filename (:last-saved state)]
     (q/fill 0 150 0) ;; Make the text green
     (q/text (str "Saved SVG as: " filename) 20 (+ sketch-height 40)))
@@ -220,7 +228,6 @@
   (let [name "fern"
         frame-num (q/frame-count)
         filename (str "svg/" name "-" frame-num ".svg")
-        ;; The :svg argument handles the file creation automatically
         gr (q/create-graphics sketch-width sketch-height :svg filename)]
     (q/with-graphics gr
       (q/with-translation [(/ sketch-width 2) (/ sketch-height 2)] (draw-fern state)))
@@ -239,10 +246,6 @@
       ;; Adjust Base Spacing
       (= k (keyword "=")) (update state :base-spacing + 1)
       (= k (keyword "-")) (update state :base-spacing (fn [x] (max 1 (- x 1))))
-
-      ;; Adjust Number of Leaves
-      (= k (keyword ".")) (update state :num-leaves + 1)
-      (= k (keyword ",")) (update state :num-leaves (fn [x] (max 0 (- x 1))))
 
       ;; Default
       :else state)))
