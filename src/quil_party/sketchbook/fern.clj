@@ -11,13 +11,13 @@
 ;; fern parameters
 (def frond-length (- sketch-height 20))
 (def max-pinna-size 10)
-(def pinna-leaf-ratio 0.085)
-(def pinna-spacing 0.025)
+(def pinna-leaf-ratio 0.1)
+(def pinna-spacing 0.08)
 (def scale-curve 0.85) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
-(def leaf-size 50)
-(def leaf-spacing 15)
+(def leaf-size 25)
+(def leaf-spacing 18)
 
 (defn setup
   "Initialize state"
@@ -29,18 +29,26 @@
 
 ;; Leaflet Drawing
 (defn draw-leaf [starting-x starting-y leaf-size]
-  (let [leaf-width (/ leaf-size 2)]
+  (let [leaf-width (* leaf-size 0.8)  ;; 0.8 for a wider shape
+        top-y      (- leaf-size)
+        belly-y    (- (* leaf-size 0.35))] ;; Widest point down to 35% of the height
     (q/no-fill)
     (q/with-translation [starting-x starting-y]
-      ;; 1. Draw leaf outlines
       (q/begin-shape)
+
+      ;; 1. Pointed bottom
       (q/vertex 0 0)
-      (q/bezier-vertex (- leaf-width) (- (/ leaf-size 2))
-                       0                 (- leaf-size)
-                       0                 (- leaf-size))
-      (q/bezier-vertex leaf-width  (- (/ leaf-size 2))
-                       0           0
-                       0           0)
+
+      ;; 2. Left side curve going up
+      (q/bezier-vertex (- leaf-width)       belly-y
+                       (- (/ leaf-width 2)) (- top-y 10)
+                       0                    top-y)
+
+      ;; 3. Right side curve going down
+      (q/bezier-vertex (/ leaf-width 2)     (- top-y 10)
+                       leaf-width           belly-y
+                       0                    0)
+
       (q/end-shape :close))))
 
 ;; Fern Drawing
