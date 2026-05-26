@@ -14,6 +14,8 @@
 (def pinna-leaf-ratio 0.1)
 (def pinna-spacing 0.08)
 (def scale-curve 0.85) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
+(def curve-options [:parabola :sine-arch :s-curve :tall-s :double-s :asymmetric-s-smooth :smooth-s-flipped])
+(def main-stem-curve :double-s)
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
 (def leaf-size 25)
@@ -25,7 +27,8 @@
   (q/frame-rate 30)
   ;; Expose params for live editing
   {:leaf-size leaf-size
-   :base-spacing leaf-spacing})
+   :base-spacing leaf-spacing
+   :stem-curve main-stem-curve})
 
 ;; Leaflet Drawing
 (defn draw-leaf [starting-x starting-y leaf-size]
@@ -60,12 +63,18 @@
                  (let [taper 0.8 ;; Adjust this: higher = bigger difference
                        scale-factor (+ 0.5 (* taper p))]
                    (* (Math/sin (* 2 Math/PI p)) scale-factor)))
-   :double-s   (fn [p] (Math/sin (* 4 Math/PI p)))      ; two S-shapes
+   :double-s   (fn [p] (Math/sin (* 2 Math/PI p)))      ; two S-shapes
    :asymmetric-s-smooth                                 ; S-curve where top and bottom curve are adjustable
    (fn [p]
      (let [breakpoint 0.7 ;; 70% the length of the stem
            k (/ (Math/log 0.5) (Math/log breakpoint))]
-       (Math/sin (* 2 Math/PI (Math/pow p k)))))})
+       (Math/sin (* 2 Math/PI (Math/pow p k)))))
+   :smooth-s-flipped
+   (fn [p]
+     (let [breakpoint 0.3
+           k (/ (Math/log 0.5) (Math/log breakpoint))
+           mirrored-p (- 1.0 p)]
+       (Math/sin (* 2.0 Math/PI (Math/pow mirrored-p k)))))})
 
 (defn angle-attrs
   "Angle calculation: Find attachment angle of leaflet or subfrond to stem.
@@ -111,7 +120,7 @@
 (defn compute-segment-geometry [i start-y current-y length bend leaf-size base-spacing depth]
   (let [dist-traveled (Math/abs (- start-y current-y))
         progress (/ dist-traveled length)
-        curve-fn (if (= depth 0) (get curve-formulas :asymmetric-s-smooth) (get curve-formulas :sine-arch))
+        curve-fn (if (= depth 0) (get curve-formulas main-stem-curve) (get curve-formulas :sine-arch))
         curve-x (* bend (curve-fn progress))
         attrs (leaflet-attrs progress leaf-size (* 2 base-spacing))
         leaf-radians (q/radians (:angle attrs))
@@ -202,9 +211,9 @@
     (q/text (str "Saved SVG as: " filename) 20 (+ sketch-height 40)))
 
   (q/fill 0)
-  (q/text (str "Leaf Size: " (:leaf-size state) " [ / ]") 300 (+ sketch-height 20))
-  (q/text (str "Spacing: "   (:base-spacing state) " - / =") 300 (+ sketch-height 40))
-  (q/text (str "Count: "     (:num-leaves state) " , / .") 500 (+ sketch-height 20)))
+  (q/text (str "Leaf Size: "  (:leaf-size state) " [ / ]") 300 (+ sketch-height 20))
+  (q/text (str "Spacing: "    (:base-spacing state) " - / =") 300 (+ sketch-height 40))
+  (q/text (str "Stem Curve: " (:stem-curve state)) 400 (+ sketch-height 20)))
 
 (defn export
   [state]
