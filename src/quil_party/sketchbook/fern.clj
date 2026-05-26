@@ -9,14 +9,13 @@
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
 ;; fern parameters
-(def frond-length (- sketch-height 200))
+(def frond-length (- sketch-height 100))
 (def max-pinna-size 7)
-(def pinna-leaf-ratio 0.09)
-(def pinna-spacing 0.04)
-(def spacing-ratio 0.45) ;; 0.25 - 0.4
-(def scale-curve 1.5) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
-(def curve-options [:parabola :sine-arch :s-curve :tall-s :double-s :asymmetric-s-smooth :smooth-s-flipped])
-(def main-stem-curve :smooth-s-flipped)
+(def pinna-leaf-ratio 0.125)
+(def pinna-spacing 0.05)
+(def frond-spacing 0.3)
+(def leaflet-spacing 0.5)
+(def scale-curve 0.8) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
 (def leaf-size 25)
@@ -29,11 +28,16 @@
   ;; Expose params for live editing
   {:leaf-size leaf-size
    :base-spacing leaf-spacing
-   :stem-curve main-stem-curve})
+   :stem-curve :smooth-s-flipped})
+
+(defn get-spacing-ratio [depth]
+  (if (zero? depth)
+    frond-spacing
+    leaflet-spacing))
 
 ;; Leaflet Drawing
 (defn draw-leaf [starting-x starting-y leaf-size]
-  (let [leaf-width (* leaf-size 0.9)  ;; 0.8 for a wider shape
+  (let [leaf-width (* leaf-size 0.5)  ;; 0.8 for a wider shape
         top-y      (- leaf-size)
         belly-y    (- (* leaf-size 0.35)) ;; Widest point down to 35% of the height
         adjusted-y (- top-y 5)]
@@ -92,39 +96,65 @@
     ;; Apply clamping
     (max 5 (min 90 angle-deg))))
 
-(defn scale-attrs
-  "Scale calculation: How big should the leaflet or subfrond be.
-   Tapers the top end of frond or sub-frond on a curve.
-   `curve-factor` <1.0 creates a concave curve, >1.0 creates a convex curve."
-  [y-progress leaf-size base-spacing]
-  (let [curve-factor scale-curve
-        sine-wave (if (<= y-progress 0.5)
-                    1.0
-                    (let [norm-t (- (* 2.0 y-progress) 1.0)] ;; Normalize 0.5->1.0 becomes 0.0->1.0
-                      (- 1.0 (Math/pow norm-t curve-factor))))
-        scale-curve-factor 2
-        scale (+ 0.1 (* scale-curve-factor sine-wave))
-        actual-leaf-size (* leaf-size scale)
-        spacing (* base-spacing (+ 0.5 sine-wave))]
-    {:size actual-leaf-size
-     :spacing spacing}))
+(defn smooth-envelope
+  "Creates a bell-shaped envelope peaking at `peak-pos` (0-1).
+   Lower power = more gradual, higher = more abrupt."
+  [t peak-pos rise-power fall-power]
+  (cond
+    (<= t 0.0) 0.0
+    (>= t 1.0) 0.0
+    (zero? peak-pos) 0.0
+    :else (let [rise (Math/pow (min 1.0 (/ t peak-pos)) rise-power)
+                fall (Math/pow (max 0.0 (/ (- 1.0 t) (- 1.0 peak-pos))) fall-power)]
+            (min 1.0 (* rise fall)))))
 
-(defn leaflet-attrs [y-progress leaf-size base-spacing]
-  (let [scale-attrs (scale-attrs y-progress leaf-size base-spacing)]
-    (merge scale-attrs
-           {:angle (angle-attrs y-progress)})))
+(defn scale-attrs
+  "Size calculation using smooth bell curve.
+   Peak at ~35% from base (like real ferns).
+   `scale-curve` controls tip taper abruptness."
+  [y-progress leaf-size]
+  (let [peak-position 0.35     ;; Peak closer to base
+        rise-power 0.5         ;; Gradual rise from base
+        fall-power scale-curve ;; Tip taper (global param)
+        envelope (smooth-envelope y-progress peak-position rise-power fall-power)
+        ;; Map envelope 0→1 to scale 0.08→2.0
+        scale (+ 0.08 (* 1.92 envelope))
+        actual-leaf-size (* leaf-size scale)]
+    {:size actual-leaf-size
+     :envelope envelope}))
+
+(defn angle-aware-spacing
+  "Spacing that accounts for leaf angle.
+   Horizontal leaves (low angle) need more space to avoid overlap."
+  [size angle-deg spacing-ratio]
+  (let [;; Vertical leaves (90°) can be tight; horizontal (0°) need room
+        angle-factor (+ 0.4 (* 0.6 (q/sin (q/radians angle-deg))))
+        computed (* size spacing-ratio angle-factor)
+        min-spacing 2.0]
+    (max min-spacing computed)))
+
+(defn leaflet-attrs [y-progress leaf-size sr]
+  (let [{:keys [size envelope]} (scale-attrs y-progress leaf-size)
+        angle-deg (angle-attrs y-progress)
+        spacing (angle-aware-spacing size angle-deg sr)]
+    {:size size
+     :angle angle-deg
+     :spacing spacing
+     :envelope envelope}))
 
 (defn in-bounds? [current-y end-y direction]
   (if (neg? direction)
     (> current-y end-y)
     (< current-y end-y)))
 
-(defn compute-segment-geometry [i start-y current-y length bend leaf-size base-spacing depth]
+(defn compute-segment-geometry [i start-y current-y length bend leaf-size depth sr state]
   (let [dist-traveled (Math/abs (- start-y current-y))
         progress (/ dist-traveled length)
-        curve-fn (if (= depth 0) (get curve-formulas main-stem-curve) (get curve-formulas :sine-arch))
+        curve-fn (if (= depth 0)
+                   (get curve-formulas (:stem-curve state))
+                   (get curve-formulas :sine-arch))
         curve-x (* bend (curve-fn progress))
-        attrs (leaflet-attrs progress leaf-size (* 2 base-spacing))
+        attrs (leaflet-attrs progress leaf-size sr)
         leaf-radians (q/radians (:angle attrs))
         rotation (if (even? i) leaf-radians (- leaf-radians))]
     {:curve-x curve-x
@@ -138,11 +168,12 @@
 
 (declare draw-frond)
 
-(defn draw-attachment [x y rotation size depth]
+(defn draw-attachment [x y rotation size depth state]
   (q/with-translation [x y]
     (q/with-rotation [rotation]
       (if (should-recurse? size depth)
-        (let [next-curve-dir (if (pos? rotation) 1 -1)]
+        (let [next-curve-dir (if (pos? rotation) 1 -1)
+              sub-sr (get-spacing-ratio (inc depth))]
           (draw-frond size ;; length
                       (* size pinna-leaf-ratio) ;; leaf-size
                       (* size pinna-spacing) ;; base-spacing
@@ -150,12 +181,14 @@
                       (- size)
                       -1
                       (inc depth)
-                      next-curve-dir))
+                      next-curve-dir
+                      sub-sr
+                      state))
         (draw-leaf 0 0 size)))))
 
-(defn draw-frond [length leaf-size base-spacing start-y end-y direction depth curve-dir]
+(defn draw-frond [length leaf-size base-spacing start-y end-y direction depth curve-dir sr state]
   (q/stroke 0)
-  (q/stroke-weight (if (zero? depth) 1.5 0.8))
+  (q/stroke-weight 1)
   (let [;; Stem bendiness
         bendiness 0.05
         bend (* length bendiness curve-dir)
@@ -166,9 +199,7 @@
         min-pixels-per-leaf 3.0
         max-leaves-by-size (int (/ length min-pixels-per-leaf))
         effective-num-leaves (max 2 (min max-leaves-by-spacing max-leaves-by-size))
-
-        spacing-to-size-ratio spacing-ratio ;; How much space to give relative to leaf size (e.g. 1.5x)
-        min-local-spacing 2]    ;; Absolute minimum spacing to prevent the loop from stalling
+        min-local-spacing 2]
 
     (loop [i 0
            current-y (+ start-y (* direction offset))
@@ -176,19 +207,15 @@
            prev-y (float start-y)]
       (when (and (< i effective-num-leaves)
                  (in-bounds? current-y end-y direction))
-        (let [{:keys [curve-x size rotation]}
-              (compute-segment-geometry i start-y current-y length bend leaf-size base-spacing depth)
-
-              ;; Calculate spacing based on the CURRENT leaf size
-              local-spacing (max min-local-spacing (* size spacing-to-size-ratio))]
+        (let [{:keys [curve-x size rotation spacing]}
+              (compute-segment-geometry i start-y current-y length bend leaf-size depth sr state)
+              local-spacing (max min-local-spacing spacing)]
 
           ;; Draw Stem Segment
           (q/line prev-x prev-y curve-x current-y)
-
           ;; Draw Leaf or Subfrond
-          (draw-attachment curve-x current-y rotation size depth)
-
-          ;; Next: Step by the local-spacing instead of a global dynamic-spacing
+          (draw-attachment curve-x current-y rotation size depth state)
+          ;; Next
           (recur (inc i)
                  (+ current-y (* direction local-spacing))
                  curve-x
@@ -199,7 +226,7 @@
         leaf-size (:leaf-size state)
         base-spacing (:base-spacing state)]
     ;; Draw Main Fern
-    (draw-frond frond-length leaf-size base-spacing half-height (- half-height) -1 0 1)))
+    (draw-frond frond-length leaf-size base-spacing half-height (- half-height) -1 0 1 (get-spacing-ratio 0) state)))
 
 (defn preview
   [state]
