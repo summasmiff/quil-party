@@ -9,15 +9,16 @@
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
 ;; fern parameters
-(def frond-length (- sketch-height 60))
+(def frond-length sketch-height)
 (def max-pinna-size 3)
-(def subfrond-leaf-scale 0.125)
-(def subfrond-density 0.02)
-(def frond-spacing 0.37)
+(def subfrond-leaf-scale 0.18)
+(def subfrond-density 0.03)
+(def frond-spacing 0.4)
 (def leaflet-spacing 0.25)
-(def scale-curve 0.4) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
-(def subfrond-size-multiplier 0.9)
-(def bendiness 0.06)
+(def scale-curve 0.75) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
+(def subfrond-size-multiplier 2.5)
+(def bendiness 0.05)
+(def max-angle 85)
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
 (def leaf-size 25)
@@ -31,7 +32,7 @@
   {:leaf-size leaf-size
    :base-spacing leaf-spacing
    :stem-curve :smooth-s-flipped
-   :leaf-shape :oval})
+   :leaf-shape :blade})
 
 (defn get-spacing-ratio [depth]
   (if (zero? depth)
@@ -87,9 +88,39 @@
 
       (q/end-shape :close))))
 
+(defn draw-blade-leaf
+  "Skinny leaf with organic pointed tip and flat bottom"
+  [starting-x starting-y leaf-size]
+  (let [leaf-width (* leaf-size 0.2)
+        top-y      (- leaf-size)
+        ;; Lower the tip slightly to round it a lil
+        tip-y      (- top-y (* leaf-size 0.1))
+        ;; Move the top control points out to bulge a lil
+        top-cp-x   (* leaf-width 0.75)]
+
+    (q/no-fill)
+    (q/with-translation [starting-x starting-y]
+      (q/begin-shape)
+
+      ;; Start at the bottom-left corner
+      (q/vertex (- leaf-width) 0)
+
+      ;; Draw the left side curve up to the tip
+      (q/bezier-vertex (- leaf-width) (- (/ leaf-size 2)) ;; CP1
+                       (- top-cp-x)   top-y               ;; CP2
+                       0              tip-y)              ;; Vertex
+
+      ;; Draw the right side curve back down to the bottom-right corner
+      (q/bezier-vertex top-cp-x       top-y               ;; CP1
+                       leaf-width     (- (/ leaf-size 2)) ;; CP2
+                       leaf-width     0)                  ;; Vertex
+
+      (q/end-shape :close))))
+
 (def leaf-shapes
   {:heart draw-heart-leaf
-   :oval  draw-oval-leaf})
+   :oval  draw-oval-leaf
+   :blade draw-blade-leaf})
 
 ;; Fern Drawing
 (def curve-formulas
@@ -123,9 +154,9 @@
   [y-progress]
   (let [exponent 0.3
         bottom-factor (q/pow (- 1 y-progress) exponent)
-        angle-deg (* 90 bottom-factor)]
+        angle-deg (* max-angle bottom-factor)]
     ;; Apply clamping
-    (max 5 (min 90 angle-deg))))
+    (max 5 (min max-angle angle-deg))))
 
 (defn smooth-envelope
   "Creates a bell-shaped envelope peaking at `peak-pos` (0-1).
@@ -183,7 +214,7 @@
         progress (/ dist-traveled length)
         curve-fn (if (= depth 0)
                    (get curve-formulas (:stem-curve state))
-                   (get curve-formulas :sine-arch))
+                   (get curve-formulas :tall-s))
         curve-x (* bend (curve-fn progress))
         attrs (leaflet-attrs progress leaf-size sr)
         leaf-radians (q/radians (:angle attrs))
@@ -224,7 +255,7 @@
   (q/stroke-weight 1)
   (let [;; Stem bendiness
         bend (* length bendiness curve-dir)
-        empty-stem (if (= 0 depth) (* length 0.2) (* length 0.09))
+        empty-stem (if (= depth 0) (* length 0.1) (* length 0.09))
         empty-step-size 5.0
 
         ;; this calculation acts as a hard upper-limit for the loop counter 'i' to prevent infinite loops
@@ -234,7 +265,6 @@
         max-leaves-by-size (int (/ length min-pixels-per-leaf))
         effective-loops (+ empty-stem-steps (max 2 (min max-leaves-by-spacing max-leaves-by-size)))
         min-local-spacing 2]
-
     (loop [i 0
            current-y (+ start-y (* direction empty-step-size))
            prev-x 0.0
@@ -248,6 +278,7 @@
 
           ;; Draw Stem Segment
           (q/line prev-x prev-y curve-x current-y)
+
           ;; Draw Leaf or Subfrond
           (when (> dist-traveled empty-stem)
             (draw-attachment curve-x current-y rotation size depth state))
@@ -260,7 +291,7 @@
 (defn draw-fern [state]
   (let [;; 20px up from bottom of screen
         ;; In translated coords (origin at sketch center), bottom = sketch-height/2
-        emergence-y (- (/ sketch-height 2) 20)
+        emergence-y (- (/ sketch-height 2) 80)
 
         leaf-size (:leaf-size state)
         base-spacing (:base-spacing state)
@@ -273,9 +304,9 @@
 
                 {:name         :center
                  :length-ratio 1.0
-                 :rotation-deg 0
-                 :x-offset     0
-                 :curve        :asymmetric-s-smooth}
+                 :rotation-deg -35
+                 :x-offset     180
+                 :curve        :tall-s}
 
                 {:name         :right
                  :length-ratio 0.88
@@ -283,7 +314,7 @@
                  :x-offset     85
                  :curve        :smooth-s-flipped}]]
 
-    (doseq [{:keys [length-ratio rotation-deg x-offset curve]} fronds]
+    (doseq [{:keys [length-ratio rotation-deg x-offset curve]} [(nth fronds 1)]]
       (let [frond-len (* frond-length length-ratio)
             local-state (assoc state :stem-curve curve)]
 
