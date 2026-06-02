@@ -8,17 +8,21 @@
 (def sketch-height 700)
 (def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
 
-;; fern parameters
+;; the fun zone
 (def frond-length sketch-height)
 (def max-pinna-size 3)
-(def subfrond-leaf-scale 0.18)
-(def subfrond-density 0.03)
-(def frond-spacing 0.4)
+(def leaf-to-subfrond-ratio 0.2)
+(def subfrond-density 0.001)
+(def frond-spacing 0.47)
 (def leaflet-spacing 0.25)
-(def scale-curve 0.75) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
-(def subfrond-size-multiplier 2.5)
+(def scale-curve 0.85) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
+(def subfrond-length-multiplier 3.2)
 (def bendiness 0.05)
-(def max-angle 85)
+(def max-angle 85) ;; 90: perpendicular to main stem
+;; AVAILABLE CURVES :parabola :sine-arch :s-curve :tall-s :double-s :asymmetric-s-smooth :smooth-s-flipped
+(def subfrond-curve (rand-nth [:s-curve :parabola :tall-s :asymmetric-s-smooth]))
+(def main-frond-curve :sine-arch)
+(def stem-thickness 4)
 
 ;; FERN INITIAL STATE / EDITABLE PARAMS
 (def leaf-size 25)
@@ -27,8 +31,8 @@
 (defn setup
   "Initialize state"
   []
-  (q/frame-rate 30)
-  ;; Expose params for live editing
+  (q/frame-rate 1)
+  ;; Expose params for live editing via keyboard
   {:leaf-size leaf-size
    :base-spacing leaf-spacing
    :stem-curve :smooth-s-flipped
@@ -125,7 +129,7 @@
 ;; Fern Drawing
 (def curve-formulas
   {:parabola   (fn [p] (* 4 p (- 1 p)))                 ; Classic Arch (C-curve)
-   :sine-arch  (fn [p] (Math/sin (* Math/PI p)))        ; Smoother, rounder Arch
+   :sine-arch  (fn [p] (Math/sin (* Math/PI p 2)))        ; Smoother, rounder Arch
    :s-curve    (fn [p] (Math/sin (* 2 Math/PI p)))      ; Standard S-curve
    :tall-s     (fn [p]
                  (let [taper 0.8 ;; Adjust this: higher = bigger difference
@@ -154,9 +158,10 @@
   [y-progress]
   (let [exponent 0.3
         bottom-factor (q/pow (- 1 y-progress) exponent)
-        angle-deg (* max-angle bottom-factor)]
+        angle-deg (* max-angle bottom-factor)
+        randomized-deg (+ angle-deg (rand 15))]
     ;; Apply clamping
-    (max 5 (min max-angle angle-deg))))
+    (max 5 (min max-angle randomized-deg))))
 
 (defn smooth-envelope
   "Creates a bell-shaped envelope peaking at `peak-pos` (0-1).
@@ -209,12 +214,9 @@
     (> current-y end-y)
     (< current-y end-y)))
 
-(defn compute-segment-geometry [i start-y current-y length bend leaf-size depth sr state]
+(defn compute-segment-geometry [i start-y current-y length bend leaf-size depth sr state curve-fn]
   (let [dist-traveled (Math/abs (- start-y current-y))
         progress (/ dist-traveled length)
-        curve-fn (if (= depth 0)
-                   (get curve-formulas (:stem-curve state))
-                   (get curve-formulas :tall-s))
         curve-x (* bend (curve-fn progress))
         attrs (leaflet-attrs progress leaf-size sr)
         leaf-radians (q/radians (:angle attrs))
@@ -228,6 +230,21 @@
   (and (> size max-pinna-size)
        (< depth 1)))
 
+(defn draw-stem-segment [x1 y1 x2 y2 taper]
+  (let [dx (- x2 x1)
+        dy (- y2 y1)
+        length (Math/sqrt (+ (* dx dx) (* dy dy)))
+        ux (/ dx length)
+        uy (/ dy length)
+        px (- uy) ;; perpendicular
+        py ux ;; perpendicular
+        thickness (* stem-thickness (- 1 taper))
+        offset-x (* 0.5 thickness px)
+        offset-y (* 0.5 thickness py)]
+    ;; Draw two parallel lines
+    (q/line (+ x1 offset-x) (+ y1 offset-y) (+ x2 offset-x) (+ y2 offset-y))
+    (q/line (- x1 offset-x) (- y1 offset-y) (- x2 offset-x) (- y2 offset-y))))
+
 (declare draw-frond)
 
 (defn draw-attachment [x y rotation size depth state]
@@ -236,9 +253,9 @@
       (if (should-recurse? size depth)
         (let [next-curve-dir (if (pos? rotation) 1 -1)
               sub-sr (get-spacing-ratio (inc depth))
-              subfrond-len (* size subfrond-size-multiplier)]
+              subfrond-len (* size subfrond-length-multiplier)]
           (draw-frond subfrond-len ;; total length
-                      (* size subfrond-leaf-scale) ;; leaf-size
+                      (* size leaf-to-subfrond-ratio) ;; leaf-size
                       (* size subfrond-density) ;; base-spacing
                       0
                       (- subfrond-len)
@@ -253,18 +270,20 @@
 (defn draw-frond [length leaf-size base-spacing start-y end-y direction depth curve-dir sr state]
   (q/stroke 0)
   (q/stroke-weight 1)
-  (let [;; Stem bendiness
-        bend (* length bendiness curve-dir)
-        empty-stem (if (= depth 0) (* length 0.1) (* length 0.09))
+  (let [bend (* length bendiness curve-dir)
+        empty-stem (if (= depth 0) (* length 0.1) (* length 0.09)) ;; TODO add top level defs for this
         empty-step-size 5.0
 
-        ;; this calculation acts as a hard upper-limit for the loop counter 'i' to prevent infinite loops
+        ;; hard upper-limit for the loop counter 'i' to prevent infinite loops
         empty-stem-steps (int (/ empty-stem empty-step-size))
         max-leaves-by-spacing (int (/ length base-spacing))
         min-pixels-per-leaf 3.0
         max-leaves-by-size (int (/ length min-pixels-per-leaf))
         effective-loops (+ empty-stem-steps (max 2 (min max-leaves-by-spacing max-leaves-by-size)))
-        min-local-spacing 2]
+        min-local-spacing 2
+        curve-fn (if (= depth 0)
+                   (get curve-formulas (:stem-curve state))
+                   (get curve-formulas (rand-nth [:s-curve :parabola :tall-s :asymmetric-s-smooth])))]
     (loop [i 0
            current-y (+ start-y (* direction empty-step-size))
            prev-x 0.0
@@ -273,15 +292,18 @@
                  (in-bounds? current-y end-y direction))
         (let [dist-traveled (Math/abs (- start-y current-y))
               {:keys [curve-x size rotation spacing]}
-              (compute-segment-geometry i start-y current-y length bend leaf-size depth sr state)
-              local-spacing (max min-local-spacing spacing)]
+              (compute-segment-geometry i start-y current-y length bend leaf-size depth sr state curve-fn)
+              local-spacing (max min-local-spacing spacing)
+              taper (/ i (double (dec effective-loops)))]
 
           ;; Draw Stem Segment
-          (q/line prev-x prev-y curve-x current-y)
+          (if (= depth 0) (draw-stem-segment prev-x prev-y curve-x current-y taper)
+              (q/line prev-x prev-y curve-x current-y))
 
           ;; Draw Leaf or Subfrond
           (when (> dist-traveled empty-stem)
             (draw-attachment curve-x current-y rotation size depth state))
+
           ;; Next
           (recur (inc i)
                  (+ current-y (* direction local-spacing))
@@ -300,19 +322,19 @@
                  :length-ratio 0.75
                  :rotation-deg -5
                  :x-offset     -65
-                 :curve        :tall-s}
+                 :curve        main-frond-curve}
 
                 {:name         :center
                  :length-ratio 1.0
                  :rotation-deg -35
                  :x-offset     180
-                 :curve        :tall-s}
+                 :curve        main-frond-curve}
 
                 {:name         :right
                  :length-ratio 0.88
                  :rotation-deg 10
                  :x-offset     85
-                 :curve        :smooth-s-flipped}]]
+                 :curve        main-frond-curve}]]
 
     (doseq [{:keys [length-ratio rotation-deg x-offset curve]} [(nth fronds 1)]]
       (let [frond-len (* frond-length length-ratio)
@@ -353,7 +375,8 @@
   (q/text (str "Leaf Size: "  (:leaf-size state) " [ / ]") 300 (+ sketch-height 20))
   (q/text (str "Spacing: "    (:base-spacing state) " - / =") 300 (+ sketch-height 40))
   (q/text (str "Leaf Shape: " (:leaf-shape state " l")) 400 (+ sketch-height 20))
-  (q/text (str "Stem Curve: " (:stem-curve state)) 400 (+ sketch-height 40)))
+  (q/text (str "Stem Curve: " (:stem-curve state)) 400 (+ sketch-height 40))
+  (q/text (str "Subfrond Curve: " subfrond-curve) 400 (+ sketch-height 60)))
 
 (defn export
   [state]
