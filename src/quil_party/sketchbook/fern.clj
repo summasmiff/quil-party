@@ -16,7 +16,7 @@
 (def leaflet-spacing 0.25)
 (def scale-curve 0.85) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
 (def subfrond-length-multiplier 3.2)
-(def bendiness 0.05)
+(def bendiness 0.4)
 (def max-angle 85) ;; 90: perpendicular to main stem
 ;; AVAILABLE CURVES :parabola :sine-arch :s-curve :tall-s :double-s :asymmetric-s-smooth :smooth-s-flipped
 (def main-frond-curve :sine-arch)
@@ -121,7 +121,9 @@
 
 ;; Fern Drawing
 (def curve-formulas
-  {:parabola   (fn [p] (* 4 p (- 1 p)))                 ; Classic Arch (C-curve)
+  {:parabola   (fn [p] (* 4 p (- 1 p)))                 ; Classic Arch
+   :neg-parabola (fn [p]
+                   (- (* 4.0 p (- 1.0 p))))             ; Backwards
    :s-curve    (fn [p] (Math/sin (* 2 Math/PI p)))      ; Standard S-curve
    :c-curve    (fn [p] (Math/sin (* Math/PI p)))
    :tall-s     (fn [p]
@@ -314,39 +316,39 @@
         fronds [{:length-ratio 0.75
                  :rotation-deg 0
                  :x-offset     0
-                 :curve        :c-curve} ;; 1
+                 :curve        :neg-parabola} ;; 1
                 {:length-ratio 0.75
                  :rotation-deg 40
                  :x-offset     0
-                 :curve        :c-curve} ;; 2
+                 :curve        :neg-parabola} ;; 2
                 {:length-ratio 0.85
                  :rotation-deg 80
                  :x-offset     0
-                 :curve        :c-curve} ;; 3
+                 :curve        :neg-parabola} ;; 3
                 {:length-ratio 0.78
                  :rotation-deg 120
                  :x-offset     0
-                 :curve        :c-curve} ;; 4
+                 :curve        :neg-parabola} ;; 4
                 {:length-ratio 0.78
                  :rotation-deg 160
                  :x-offset     0
-                 :curve        :c-curve} ;; 5
+                 :curve        :neg-parabola} ;; 5
                 {:length-ratio 0.78
                  :rotation-deg 200
                  :x-offset     0
-                 :curve        :c-curve} ;; 6
+                 :curve        :neg-parabola} ;; 6
                 {:length-ratio 0.78
                  :rotation-deg 240
                  :x-offset     0
-                 :curve        :c-curve} ;; 7
+                 :curve        :neg-parabola} ;; 7
                 {:length-ratio 0.78
                  :rotation-deg 280
                  :x-offset     0
-                 :curve        :c-curve} ;; 8
+                 :curve        :neg-parabola} ;; 8
                 {:length-ratio 0.78
                  :rotation-deg -40
                  :x-offset     0
-                 :curve        :c-curve} ;; 9
+                 :curve        :neg-parabola} ;; 9
                 ]]
 
     (doseq [{:keys [length-ratio rotation-deg x-offset curve]} fronds]
@@ -476,7 +478,7 @@
                             (redraw-fern (assoc state :leaf-shape (or new-leaf (first all-leaves)))))
 
       ;; Bendiness (b/v for bend)
-      (= k (keyword "b")) (redraw-fern (update state :bendiness (fn [v] (inc-val v 0.01 0.001 0.2))))
+      (= k (keyword "b")) (redraw-fern (update state :bendiness (fn [v] (inc-val v 0.01 0.001 1.0))))
       (= k (keyword "v")) (redraw-fern (update state :bendiness (fn [v] (inc-val v -0.01 0.001 0.2))))
 
       ;; Max Angle (a/z)
