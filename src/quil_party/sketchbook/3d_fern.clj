@@ -1,7 +1,8 @@
 (ns quil-party.sketchbook.3d-fern
   "Sketch suitable for AxiDraw pen plotter"
   (:require [quil.core :as q]
-            [quil.middleware :as m]))
+            [quil.middleware :as m]
+            [quil.applet :as applet]))
 
 ;; the fun zone
 (def init-size 10)  ;; initial circle size
@@ -14,14 +15,14 @@
 (def center-x 400)
 (def center-y 300)
 
-(defn setup 
+(defn setup
   "init state"
   []
-  (q/frame-rate 30)
+  (q/frame-rate 1)
   {:size init-size
    :num-points resolution})
 
-(defn update-state 
+(defn update-state
   [state]
   {:size (+ (:size state) 1)
    :num-points (:num-points state)})
@@ -51,8 +52,12 @@
   (let [size (:size state)
         num-points (:num-points state)]
     (q/background 255)
-    (draw size num-points)
-    
+    (q/hint :enable-depth-test)
+    (q/camera 0 0 400 0 0 0 0 1 0)
+    (q/box 150)
+
+    #_(draw size num-points)
+
     ;; parameter review section
     (q/fill 255)
     (q/rect 0 sketch-height sketch-width (- preview-height sketch-height))
@@ -65,7 +70,7 @@
     (q/text (str "size: " size) 20 (+ sketch-height 30))
     (q/text (str "points: " num-points) 20 (+ sketch-height 50))))
 
-(defn export 
+(defn export
   "saves svg to a file"
   [state]
   (let [name "3d-fern"
@@ -89,6 +94,7 @@
   :title "3d fern"
   :size [sketch-width preview-height]
   :setup setup
+  :renderer :opengl
   :draw preview
   :update update-state
   :key-pressed key-pressed
