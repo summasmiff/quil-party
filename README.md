@@ -6,6 +6,10 @@ Doodling with the [Quil library](http://quil.info/) in Clojure
 **Crop Circles** 2025
 
 ## Usage
+### New sketch generation
+Use the generation script: `bin/new.sh --name "3d fern"`
+
+### Playing with existing sketches
 - Jack-in using Leiningen
 - sketches live in `./src/quil_party`
 - Evaluate (q/defsketch) to open visualizer (shift ctrl opt)
