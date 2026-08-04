@@ -9,10 +9,11 @@
 (def preview-height (+ sketch-height 100))
 (def start-x 400)
 (def start-y 450)
+(def minimum-length 1.5)
 
-(def default-state
+(def initial-state
   {:initial-length 30
-   :branch-ratio 0.95         ;; Changed to a 0.0 - 1.0 ratio for perfect space-filling
+   :branch-ratio 0.95 ;; 0.0 - 1.0
    :length-decay 1.44
    :max-depth 5
    :max-global-angle 1.35
@@ -22,27 +23,29 @@
   "init state with ginkgo parameters"
   []
   (q/frame-rate 30)
-  default-state)
-
-(defn update-state
-  "No automatic updates - all parameters controlled by keys"
-  [state]
-  state)
+  initial-state)
 
 (defn draw-branch
-  "Recursively draws a binary branch. Uses relative spacing so gaps match at all scales."
+  "Recursively draws a binary branch."
   [x y angle length depth state left-bound right-bound]
   (let [{:keys [branch-ratio length-decay max-depth max-global-angle]} state]
+    ;; Recursive condition: continue drawing branches when
+    ;; less than max depth,
+    ;; greater than minimum length,
+    ;; and less than global angle
     (when (and (< depth max-depth)
-               (> length 1.5)
+               (> length minimum-length)
                (<= (Math/abs angle) max-global-angle))
       (let [x2 (+ x (* length (Math/sin angle)))
             y2 (- y (* length (Math/cos angle)))]
+        ;; Draw vein
         (q/line x y x2 y2)
+
+        ;; Params for branches off vein
         (let [new-length (* length length-decay)
               new-depth (inc depth)
 
-              ;; Calculate the maximum angle this branch could turn without overlapping
+              ;; find the max angle this branch could turn without overlapping
               max-turn-left (- angle left-bound)
               max-turn-right (- right-bound angle)
 
@@ -66,9 +69,11 @@
     (q/stroke-weight 1.5)
     (q/stroke 0)
     (q/no-fill)
+
     (if (< num-initial-veins 2)
-      ;; If only 1 vein, give it the entire global fan as its territory
+      ;; Guard: if only 1 initial vein, give it the entire fan as its territory
       (draw-branch start-x start-y 0 initial-length 0 state (- max-global-angle) max-global-angle)
+      ;; else
       (let [step (/ (* 2 max-global-angle) (dec num-initial-veins))]
         (doseq [i (range num-initial-veins)]
           (let [angle (- max-global-angle (* i step))
@@ -149,7 +154,7 @@
       (keyword "f") (update state :max-global-angle + 0.1)
       (keyword "c") (update state :num-initial-veins #(max 0 (- % 1)))
       (keyword "v") (update state :num-initial-veins + 1)
-      (keyword "g") default-state
+      (keyword "g") initial-state
       :up (do (export state) state)
       state)))
 
@@ -158,7 +163,7 @@
   :size [sketch-width preview-height]
   :setup setup
   :draw preview
-  :update update-state
+  :update (fn [state] state)
   :key-pressed key-pressed
   :middleware [m/fun-mode]
   :features [:keep-on-top])
