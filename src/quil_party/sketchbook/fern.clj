@@ -1,31 +1,43 @@
 (ns quil-party.sketchbook.fern
+  "the fern synthesizer: create unique fern fronds"
   (:require [quil.core :as q]
             [quil.middleware :as m]))
 
 ;; boring constants
 (def sketch-width 600)
 (def sketch-height 700)
-(def preview-height (+ sketch-height 80))  ;; Add 80 pixels for instructions
+(def preview-height (+ sketch-height 80))  ;; Add 80 pixels for parameter display
+(def frond-length (- sketch-height 40))
+(def max-pinna-size 3) ;; Controls recursion depth
 
 ;; the fun zone
-(def frond-length sketch-height)
-(def max-pinna-size 3)
-(def leaf-to-subfrond-ratio 0.2)
+;; TODO: randomize all of these
+(def leaf-size 30)
+(def leaf-spacing 7)
+(def subfrond-length-multiplier 2.8)
 (def subfrond-density 0.001)
-(def frond-spacing 0.47)
-(def leaflet-spacing 0.25)
-(def scale-curve 0.85) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
-(def subfrond-length-multiplier 3.2)
-(def bendiness 0.4)
+
 (def max-angle 85) ;; 90: perpendicular to main stem
+(def scale-curve 0.65) ;; <1.0 creates a concave curve, >1.0 creates a convex curve.
+(def leaf-to-subfrond-ratio 0.2)
+
+(def bendiness 0.01)
+(def frond-spacing 1.0)
+(def leaflet-spacing 0.45)
+
 ;; AVAILABLE CURVES :parabola :sine-arch :s-curve :tall-s :double-s :asymmetric-s-smooth :smooth-s-flipped
 (def main-frond-curve :sine-arch)
 (def stem-thickness 4)
 
-;; FERN INITIAL STATE / EDITABLE PARAMS
-(def leaf-size 25)
-(def leaf-spacing 11)
+;; saved fern configs...move to a separate file?
+(def cinnamon-fern
+  {:frond-spacing 0.6
+   :scale-curve 0.6
+   :leaflet-spacing 0.35
+   :leaf-size 20
+   :leaf-to-subfrond-ratio 0.2})
 
+;; FERN INITIAL STATE / EDITABLE PARAMS
 (defn get-spacing-ratio [depth state]
   (if (zero? depth)
     (:frond-spacing state)
@@ -83,7 +95,7 @@
 (defn draw-blade-leaf
   "Skinny leaf with organic pointed tip and flat bottom"
   [starting-x starting-y leaf-size]
-  (let [leaf-width (* leaf-size 0.2)
+  (let [leaf-width (* leaf-size 0.15)
         top-y      (- leaf-size)
         ;; Lower the tip slightly to round it a lil
         tip-y      (- top-y (* leaf-size 0.1))
@@ -109,28 +121,64 @@
 
       (q/end-shape :close))))
 
-(defn draw-asymmetrical-leaf [_starting-x _starting-y _leaf-size]
-  ;; TODO
-  )
+(defn draw-smooth-leaf
+  "Skinny leaf with even edges, a curved tip, and an indented base"
+  [starting-x starting-y leaf-size]
+  (let [leaf-width     (* leaf-size 0.12)
+        top-y          (- leaf-size)
+        ;; How far below the tip the control points sit (controls roundness)
+        tip-roundness  (* leaf-size 0.12)
+        ;; X offset for tip control points - stays on their OWN side
+        tip-cp-x       (* leaf-width 0.4)
+        ;; How far down the base curves to create the indent
+        base-indent-y  (* leaf-size 0.05)]
+
+    (q/no-fill)
+    (q/with-translation [starting-x starting-y]
+      (q/begin-shape)
+
+      ;; Start at the bottom-left corner
+      (q/vertex (- leaf-width) 0)
+
+      ;; Left side up to the tip
+      ;; CP1 is directly above the start, keeping the edge perfectly even
+      ;; CP2 stays on the LEFT side to round the tip without looping
+      (q/bezier-vertex (- leaf-width)   (- (/ leaf-size 2))        ;; CP1
+                       (- tip-cp-x)     (+ top-y tip-roundness)    ;; CP2
+                       0                top-y)                      ;; Vertex (Tip)
+
+      ;; Right side back down
+      ;; CP1 stays on the RIGHT side (mirrors CP2 above) to complete the round tip
+      ;; CP2 is directly below the end, keeping the edge perfectly even
+      (q/bezier-vertex tip-cp-x         (+ top-y tip-roundness)    ;; CP1
+                       leaf-width       (- (/ leaf-size 2))        ;; CP2
+                       leaf-width       0)                         ;; Vertex (Bottom-right)
+
+      ;; Base curve: draws inward before closing
+      (q/bezier-vertex (/ leaf-width 2) base-indent-y       ;; CP1
+                       (- (/ leaf-width 2)) base-indent-y   ;; CP2
+                       (- leaf-width) 0)                    ;; Vertex (Back to start)
+
+      (q/end-shape :close))))
 
 (def leaf-shapes
-  {:heart draw-heart-leaf
-   :oval  draw-oval-leaf
-   :blade draw-blade-leaf
-   :asymmetrical draw-asymmetrical-leaf})
+  {:heart  draw-heart-leaf
+   :oval   draw-oval-leaf
+   :blade  draw-blade-leaf
+   :smooth draw-smooth-leaf})
 
 ;; Fern Drawing
 (def curve-formulas
   {:parabola   (fn [p] (* 4 p (- 1 p)))                 ; Classic Arch
    :neg-parabola (fn [p]
                    (- (* 4.0 p (- 1.0 p))))             ; Backwards
-   :s-curve    (fn [p] (Math/sin (* 2 Math/PI p)))      ; Standard S-curve
+   :s-curve    (fn [p] (Math/sin (* Math/PI p)))      ; Standard S-curve
    :c-curve    (fn [p] (Math/sin (* Math/PI p)))
    :tall-s     (fn [p]
                  (let [taper 0.8 ;; Adjust this: higher = bigger difference
                        scale-factor (+ 0.5 (* taper p))]
-                   (* (Math/sin (* 2 Math/PI p)) scale-factor)))
-   :double-s   (fn [p] (Math/sin (* 2 Math/PI p)))      ; two S-shapes
+                   (* (Math/sin (* Math/PI p)) scale-factor)))
+   :double-s   (fn [p] (Math/sin (* Math/PI p)))      ; two S-shapes
    :asymmetric-s-smooth                                 ; S-curve where top and bottom curve are adjustable
    (fn [p]
      (let [breakpoint 0.7 ;; 70% the length of the stem
@@ -248,18 +296,19 @@
     (q/with-rotation [rotation]
       (if (should-recurse? size depth state)
         (let [next-curve-dir (if (pos? rotation) 1 -1)
-              sub-sr (get-spacing-ratio (inc depth) state)
+              spacing-ratio (get-spacing-ratio (inc depth) state)
               subfrond-len (* size (:subfrond-length-multiplier state))]
           (draw-frond subfrond-len ;; total length
                       (* size (:leaf-to-subfrond-ratio state)) ;; leaf-size
                       (* size (:subfrond-density state)) ;; base-spacing
-                      0
-                      (- subfrond-len)
-                      -1
-                      (inc depth)
+                      0 ;; start-y
+                      (- subfrond-len) ;; end-y
+                      -1 ;; direction
+                      (inc depth) ;; depth
                       next-curve-dir
-                      sub-sr
+                      spacing-ratio
                       state))
+
         (let [leaf-fn (get leaf-shapes (:leaf-shape state) draw-oval-leaf)]
           (leaf-fn 0 0 size))))))
 
@@ -279,7 +328,7 @@
         min-local-spacing 2
         curve-fn (if (= depth 0)
                    (get curve-formulas (:stem-curve state))
-                   (get curve-formulas (rand-nth [:s-curve :parabola :tall-s :asymmetric-s-smooth])))]
+                   (get curve-formulas (rand-nth [:s-curve :parabola])))]
     (loop [i 0
            current-y (+ start-y (* direction empty-step-size))
            prev-x 0.0
@@ -298,7 +347,8 @@
 
           ;; Draw Leaf or Subfrond
           (when (> dist-traveled empty-stem)
-            (draw-attachment curve-x current-y rotation size depth state))
+            (draw-attachment curve-x current-y rotation size depth state)
+            (draw-attachment curve-x current-y (- rotation) size depth state))
 
           ;; Next
           (recur (inc i)
@@ -307,49 +357,16 @@
                  current-y))))))
 
 (defn draw-fern [state]
-  (let [;; 0 = center??
-        emergence-y 0
+  (let [;; 0 = center
+        emergence-y (/ sketch-height 2)
 
         leaf-size (:leaf-size state)
         base-spacing (:base-spacing state)
 
-        fronds [{:length-ratio 0.75
+        fronds [{:length-ratio 1
                  :rotation-deg 0
                  :x-offset     0
-                 :curve        :neg-parabola} ;; 1
-                {:length-ratio 0.75
-                 :rotation-deg 40
-                 :x-offset     0
-                 :curve        :neg-parabola} ;; 2
-                {:length-ratio 0.85
-                 :rotation-deg 80
-                 :x-offset     0
-                 :curve        :neg-parabola} ;; 3
-                {:length-ratio 0.78
-                 :rotation-deg 120
-                 :x-offset     0
-                 :curve        :neg-parabola} ;; 4
-                {:length-ratio 0.78
-                 :rotation-deg 160
-                 :x-offset     0
-                 :curve        :neg-parabola} ;; 5
-                {:length-ratio 0.78
-                 :rotation-deg 200
-                 :x-offset     0
-                 :curve        :neg-parabola} ;; 6
-                {:length-ratio 0.78
-                 :rotation-deg 240
-                 :x-offset     0
-                 :curve        :neg-parabola} ;; 7
-                {:length-ratio 0.78
-                 :rotation-deg 280
-                 :x-offset     0
-                 :curve        :neg-parabola} ;; 8
-                {:length-ratio 0.78
-                 :rotation-deg -40
-                 :x-offset     0
-                 :curve        :neg-parabola} ;; 9
-                ]]
+                 :curve        :tall-s}]]
 
     (doseq [{:keys [length-ratio rotation-deg x-offset curve]} fronds]
       (let [frond-len (* (:frond-length state) length-ratio)
@@ -370,19 +387,18 @@
              local-state)))))))
 
 (defn redraw-fern
-  "Regenerate the fern graphics buffer from the current state"
   [state]
-  (let [g (q/create-graphics sketch-width sketch-height)]
+  (when-let [g (:fern-g state)]
     (q/with-graphics g
       (q/background 255)
       (q/with-translation [(/ sketch-width 2) (/ sketch-height 2)]
-        (draw-fern state)))
-    (assoc state :fern-g g)))
+        (draw-fern state))))
+  state)
 
 (defn setup
   "Initialize state"
   []
-  (q/frame-rate 1)
+  (q/frame-rate 60)
   (let [g (q/create-graphics sketch-width sketch-height)
         state {:leaf-size leaf-size
                :base-spacing leaf-spacing
@@ -419,19 +435,17 @@
   (q/fill 0)
   (q/text-size 11)
 
-  (q/text "UP: Export SVG  L: Cycle Leaves" 10 (+ sketch-height 15))
+  (q/text "UP: Export SVG" 10 (+ sketch-height 15))
+  (q/text (str "L: Cycle Leaves (current leaf: " (:leaf-shape state) ")") 180 (+ sketch-height 15))
 
-  ;; Row 1: Short, Medium, Medium
   (q/text (str "Leaf Size: "  (:leaf-size state) " []") 10 (+ sketch-height 30))
   (q/text (str "Max Angle: "  (:max-angle state) " az") 180 (+ sketch-height 30))
   (q/text (str "Bendiness: "  (format "%.3f" (:bendiness state)) " bv") 350 (+ sketch-height 30))
 
-  ;; Row 2: Short, Medium, Medium
   (q/text (str "Spacing: "    (:base-spacing state) " =-") 10 (+ sketch-height 45))
-  (q/text (str "Scale Curve: " (format "%.1f" (:scale-curve state)) " sx") 180 (+ sketch-height 45))
+  (q/text (str "Scale Curve: " (format "%.2f" (:scale-curve state)) " sx") 180 (+ sketch-height 45))
   (q/text (str "Frond Spacing: " (format "%.2f" (:frond-spacing state)) " tg") 350 (+ sketch-height 45))
 
-  ;; Row 3: Long, Long, Medium
   (q/text (str "Subfrond Length: " (format "%.1f" (:subfrond-length-multiplier state)) " dc") 10 (+ sketch-height 60))
   (q/text (str "Leaf to Subfrond Ratio: " (format "%.2f" (:leaf-to-subfrond-ratio state)) " ew") 180 (+ sketch-height 60))
   (q/text (str "Leaflet Spacing: " (format "%.2f" (:leaflet-spacing state)) " yh") 350 (+ sketch-height 60))
@@ -442,7 +456,7 @@
   (when-let [filename (:last-saved state)]
     (q/fill 0 150 0)
     (q/text-size 10)
-    (q/text (str "✓ " filename) 10 (+ sketch-height 75))))
+    (q/text (str "✓ " filename) 350 (+ sketch-height 75))))
 
 (defn export
   [state]
@@ -486,8 +500,8 @@
       (= k (keyword "z")) (redraw-fern (update state :max-angle (fn [v] (inc-val v -5 5 90))))
 
       ;; Scale Curve (s/x)
-      (= k (keyword "s")) (redraw-fern (update state :scale-curve (fn [v] (inc-val v 0.1 0.1 2.0))))
-      (= k (keyword "x")) (redraw-fern (update state :scale-curve (fn [v] (inc-val v -0.1 0.1 2.0))))
+      (= k (keyword "s")) (redraw-fern (update state :scale-curve (fn [v] (inc-val v 0.05 0.1 2.0))))
+      (= k (keyword "x")) (redraw-fern (update state :scale-curve (fn [v] (inc-val v -0.05 0.1 2.0))))
 
       ;; Subfrond Length Multiplier (d/c)
       (= k (keyword "d")) (redraw-fern (update state :subfrond-length-multiplier (fn [v] (inc-val v 0.1 1.0 5.0))))
@@ -502,8 +516,8 @@
       (= k (keyword "f")) (redraw-fern (update state :subfrond-density (fn [v] (inc-val v -0.0005 0.0001 0.005))))
 
       ;; Frond Spacing (t/g)
-      (= k (keyword "t")) (redraw-fern (update state :frond-spacing (fn [v] (inc-val v 0.05 0.1 1.0))))
-      (= k (keyword "g")) (redraw-fern (update state :frond-spacing (fn [v] (inc-val v -0.05 0.1 1.0))))
+      (= k (keyword "t")) (redraw-fern (update state :frond-spacing (fn [v] (inc-val v 0.05 0.1 2.0))))
+      (= k (keyword "g")) (redraw-fern (update state :frond-spacing (fn [v] (inc-val v -0.05 0.1 2.0))))
 
       ;; Leaflet Spacing (y/h)
       (= k (keyword "y")) (redraw-fern (update state :leaflet-spacing (fn [v] (inc-val v 0.05 0.1 1.0))))
