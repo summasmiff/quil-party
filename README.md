@@ -3,31 +3,29 @@ A creative coding sketchbook using Clojure + Quil (Processing) for generative ar
 
 ## the sketches
 
-<style>
-img { display:block; width:1000px; height:250px; object-fit:cover; margin:0 auto 0.5rem; }
-figure { margin:0 0 1.5rem; }
-figcaption { text-align:center; }
-</style>
-
-<figure>
+<p>
   <img src="./img/readme_imgs/crop-circles-cropped.jpg" alt="Crop Circles" width="1000" height="250">
-  <figcaption><strong>Crop Circles</strong> 2025</figcaption>
-</figure>
+  <br>
+  <strong>Crop Circles</strong> 2025
+</p>
 
-<figure>
+<p>
   <img src="./img/readme_imgs/fern.jpg" alt="Fern" width="1000" height="250">
-  <figcaption><strong>Fern</strong> 2025</figcaption>
-</figure>
+  <br>
+  <strong>Fern</strong> 2025
+</p>
 
-<figure>
+<p>
   <img src="./img/readme_imgs/ginkgo.png" alt="Ginkgo" width="1000" height="250">
-  <figcaption><strong>Ginkgo</strong> 2025</figcaption>
-</figure>
+  <br>
+  <strong>Ginkgo</strong> 2025
+</p>
 
-<figure>
+<p>
   <img src="./img/readme_imgs/waveforms.jpg" alt="Waveforms" width="1000" height="250">
-  <figcaption><strong>Waveforms</strong> 2025</figcaption>
-</figure>
+  <br>
+  <strong>Waveforms</strong> 2025
+</p>
 
 ## Usage
 ### New sketch generation
