@@ -29,14 +29,6 @@
 (def main-frond-curve :sine-arch)
 (def stem-thickness 4)
 
-;; saved fern configs...move to a separate file?
-(def cinnamon-fern
-  {:frond-spacing 0.6
-   :scale-curve 0.6
-   :leaflet-spacing 0.35
-   :leaf-size 20
-   :leaf-to-subfrond-ratio 0.2})
-
 ;; FERN INITIAL STATE / EDITABLE PARAMS
 (defn get-spacing-ratio [depth state]
   (if (zero? depth)

@@ -1,9 +1,33 @@
 # quil-party
-Doodling with the [Quil library](http://quil.info/) in Clojure
+A creative coding sketchbook using Clojure + Quil (Processing) for generative art and visual experimentation.
 
-<img src="./img/readme_imgs/crop-circles-cropped.jpg">
+## the sketches
 
-**Crop Circles** 2025
+<style>
+img { display:block; width:1000px; height:250px; object-fit:cover; margin:0 auto 0.5rem; }
+figure { margin:0 0 1.5rem; }
+figcaption { text-align:center; }
+</style>
+
+<figure>
+  <img src="./img/readme_imgs/crop-circles-cropped.jpg" alt="Crop Circles" width="1000" height="250">
+  <figcaption><strong>Crop Circles</strong> 2025</figcaption>
+</figure>
+
+<figure>
+  <img src="./img/readme_imgs/fern.jpg" alt="Fern" width="1000" height="250">
+  <figcaption><strong>Fern</strong> 2025</figcaption>
+</figure>
+
+<figure>
+  <img src="./img/readme_imgs/ginkgo.png" alt="Ginkgo" width="1000" height="250">
+  <figcaption><strong>Ginkgo</strong> 2025</figcaption>
+</figure>
+
+<figure>
+  <img src="./img/readme_imgs/waveforms.jpg" alt="Waveforms" width="1000" height="250">
+  <figcaption><strong>Waveforms</strong> 2025</figcaption>
+</figure>
 
 ## Usage
 ### New sketch generation
@@ -29,6 +53,4 @@ In order to call the functions directly in the REPL, they need to be wrapped wit
 - make sure you add a `stroke="black"` attribute on the top level `<g>` in your svg
 - or figure out how to get q/create-graphics to do this
 
-<img src="./img/waveforms.jpg">
 
-**Waveforms** 2025
